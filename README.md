@@ -80,9 +80,9 @@ world saved data and is never normally reshuffled.
 
 This inner repository is intentionally separate from Region Engine and Koyo.
 The local build uses development-only compile contracts for the adjacent Region
-Engine build and the local Cobblemon 1.7.3 jar; neither is embedded in the
-output.
+Engine build and a user-supplied Cobblemon 1.7.3 jar; neither is embedded in
+the output.
 
 ```powershell
-.\gradlew.bat clean build --no-daemon
+.\gradlew.bat clean build --no-daemon -Pcobblemon_dev_jar="C:\path\to\Cobblemon-fabric-1.7.3+1.21.1.jar"
 ```

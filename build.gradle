@@ -26,7 +26,11 @@ dependencies {
     // Local development contracts only. The released mod declares both as
     // runtime dependencies and never embeds either jar.
     modCompileOnly files('../../region-engine/repo/build/libs/region_engine-0.7.0.jar')
-    modCompileOnly files('C:/Users/ashle/AppData/Roaming/PrismLauncher/instances/Fabric Seed test/minecraft/mods/Cobblemon-fabric-1.7.3+1.21.1.jar')
+    def cobblemonDevJar = providers.gradleProperty('cobblemon_dev_jar').orNull
+    if (cobblemonDevJar == null) {
+        throw new GradleException('Set -Pcobblemon_dev_jar=<path to Cobblemon Fabric jar> for local development.')
+    }
+    modCompileOnly files(cobblemonDevJar)
     compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.0.0'
 }
 
