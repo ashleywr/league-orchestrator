@@ -1,0 +1,53 @@
+plugins {
+    id 'java-library'
+    id 'fabric-loom' version "${fabric_loom_version}"
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+repositories {
+    maven { url = 'https://maven.fabricmc.net/' }
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+
+    // Local development contracts only. The released mod declares both as
+    // runtime dependencies and never embeds either jar.
+    modCompileOnly files('../../region-engine/repo/build/libs/region_engine-0.7.0.jar')
+    modCompileOnly files('C:/Users/ashle/AppData/Roaming/PrismLauncher/instances/Fabric Seed test/minecraft/mods/Cobblemon-fabric-1.7.3+1.21.1.jar')
+    compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.0.0'
+}
+
+processResources {
+    inputs.properties([
+            version: project.version,
+            mod_id: mod_id,
+            mod_name: mod_name,
+            mod_description: mod_description,
+            mod_license: mod_license,
+            mod_authors: mod_authors,
+            fabric_loader_version: fabric_loader_version,
+            minecraft_version: minecraft_version
+    ])
+
+    filesMatching('fabric.mod.json') {
+        expand(inputs.properties)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
