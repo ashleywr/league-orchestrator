@@ -1,0 +1,7 @@
+{
+  "pool": "kanto_badges",
+  "region_profiles": ["region_engine:kanto"],
+  "structure_tag": "rad_gyms:gym_entrance_ground",
+  "trainer": "league_orchestrator:kanto_ground_leader",
+  "badge": "league_orchestrator:kanto_ground"
+}

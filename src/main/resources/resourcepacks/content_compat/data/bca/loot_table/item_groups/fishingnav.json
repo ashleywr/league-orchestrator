@@ -1,0 +1,11 @@
+{
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        { "type": "minecraft:item", "name": "minecraft:fishing_rod", "weight": 3 },
+        { "type": "minecraft:item", "name": "minecraft:bucket", "weight": 1 }
+      ]
+    }
+  ]
+}

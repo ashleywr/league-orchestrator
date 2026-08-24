@@ -1,0 +1,16 @@
+{
+  "placement": {
+    "type": "minecraft:random_spread",
+    "spread_type": "triangular",
+    "salt": 873421,
+    "separation": 96,
+    "spacing": 256
+  },
+  "structures": [
+    { "structure": "league_orchestrator:wild_pokecenter", "weight": 1 }
+  ],
+  "exclusion_zone": {
+    "other_set": "minecraft:villages",
+    "chunk_count": 24
+  }
+}

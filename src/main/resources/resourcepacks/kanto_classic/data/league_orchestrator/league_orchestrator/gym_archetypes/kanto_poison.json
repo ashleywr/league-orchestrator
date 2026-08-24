@@ -1,0 +1,7 @@
+{
+  "pool": "kanto_badges",
+  "region_profiles": ["region_engine:kanto"],
+  "structure_tag": "rad_gyms:gym_entrance_poison",
+  "trainer": "league_orchestrator:kanto_poison_leader",
+  "badge": "league_orchestrator:kanto_poison"
+}
