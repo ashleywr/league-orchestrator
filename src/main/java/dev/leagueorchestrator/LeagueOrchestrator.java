@@ -9,6 +9,9 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.ResourcePackActivationType;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.PackType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +26,11 @@ public final class LeagueOrchestrator implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        ResourceManagerHelper.registerBuiltinResourcePack(
+                ResourceLocation.fromNamespaceAndPath(MOD_ID, "kanto_classic"),
+                FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
+                ResourcePackActivationType.NORMAL
+        );
         ResourceManagerHelper.get(PackType.SERVER_DATA)
                 .registerReloadListener(new LeagueDataReloadListener());
         ServerLifecycleEvents.SERVER_STARTED.register(WorldLeaguePlan::ensureAllOverworldPlans);

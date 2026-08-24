@@ -76,6 +76,28 @@ separate pools such as `fire_badges`, `water_badges`, and `grass_badges` to
 randomize independently by Pokémon type. The resolved allocation is stored in
 world saved data and is never normally reshuffled.
 
+## Kanto Classic built-in pack
+
+The mod includes the normal, opt-in **League Orchestrator — Kanto Classic
+regional profile and species policy** data pack. Enable it above Region Engine
+Atlas Test when creating a new world. It replaces only the `region_engine:kanto`
+profile, leaving every other continent available for a different regional pack.
+
+Kanto Classic uses a temperate Tokyo/Kanto-inspired palette: plains, forests,
+river valleys, beaches, wetlands, and modest windswept/stony mountains. It
+deliberately excludes jungle, desert, badlands, taiga, frozen, and ice biomes.
+Its profile terrain favors mixed lowlands and mountains while minimizing large
+inland lakes.
+
+The initial species policy contains the 146 non-mythical Generation-I Cobblemon
+species. Articuno, Zapdos, Moltres, and Mewtwo are denied to normal wild spawns
+and reserved for future structure encounters; Mew is not included in the normal
+Kanto encounter policy. This is a regional eligibility layer, not a copied
+FireRed/LeafGreen or HeartGold/SoulSilver encounter table: it prevents unrelated
+species from leaking in, but does not invent a spawn entry where Cobblemon has
+none. The next content pass will supply original habitat/route-tier spawn pools
+and the separately curated HeartGold/SoulSilver Kanto extension set.
+
 ## Development
 
 This inner repository is intentionally separate from Region Engine and Koyo.
