@@ -83,6 +83,17 @@ regional profile and species policy** data pack. Enable it above Region Engine
 Atlas Test when creating a new world. It replaces only the `region_engine:kanto`
 profile, leaving every other continent available for a different regional pack.
 
+For the current built-in packs, data-pack priority from bottom to top is:
+
+1. Any Region Engine biome-compatibility packs for installed biome mods.
+2. **Region Engine — Atlas Test**.
+3. **League Orchestrator — Kanto Classic regional profile and species policy**.
+
+Kanto Classic must be highest because it overrides the base Kanto profile;
+the compatibility packs only contribute optional biome-tag entries. Select the
+packs before creating the world and do not alter the selected worldgen packs
+after chunks have generated.
+
 Kanto Classic uses a temperate Tokyo/Kanto-inspired palette: plains, forests,
 river valleys, beaches, wetlands, and modest windswept/stony mountains. It
 deliberately excludes jungle, desert, badlands, taiga, frozen, and ice biomes.
