@@ -1,0 +1,10 @@
+{
+  "type": "leader",
+  "series": ["league_orchestrator_kanto"],
+  "requiredDefeats": [],
+  "optional": false,
+  "maxTrainerWins": 3,
+  "maxTrainerDefeats": 1,
+  "battleCooldownTicks": 240,
+  "spawnWeightFactor": 0
+}

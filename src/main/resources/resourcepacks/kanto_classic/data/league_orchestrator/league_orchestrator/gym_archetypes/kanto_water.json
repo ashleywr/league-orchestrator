@@ -1,7 +1,7 @@
 {
   "pool": "kanto_badges",
   "region_profiles": ["region_engine:kanto"],
-  "structure_tag": "rad_gyms:gym_entrance_water",
-  "trainer": "league_orchestrator:kanto_water_leader",
+  "structure_tag": "league_orchestrator:village_gym",
+  "trainer": "kanto_leader_misty",
   "badge": "league_orchestrator:kanto_water"
 }

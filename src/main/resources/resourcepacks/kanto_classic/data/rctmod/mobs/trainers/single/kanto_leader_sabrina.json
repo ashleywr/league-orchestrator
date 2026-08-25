@@ -1,0 +1,13 @@
+{
+  "type": "leader",
+  "series": ["league_orchestrator_kanto"],
+  "requiredDefeats": [
+    ["kanto_leader_brock", "kanto_leader_misty", "kanto_leader_erika"],
+    ["kanto_leader_ltsurge", "kanto_leader_koga"]
+  ],
+  "optional": false,
+  "maxTrainerWins": 3,
+  "maxTrainerDefeats": 1,
+  "battleCooldownTicks": 240,
+  "spawnWeightFactor": 0
+}

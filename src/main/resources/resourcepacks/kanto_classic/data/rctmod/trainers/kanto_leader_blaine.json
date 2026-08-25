@@ -1,0 +1,54 @@
+{
+  "name": "Gym Leader Blaine",
+  "identity": "Kanto Fire-type Gym Leader",
+  "ai": {
+    "type": "rct",
+    "data": {
+      "maxSelectMargin": 0.15
+    }
+  },
+  "team": [
+    {
+      "species": "growlithe",
+      "gender": "MALE",
+      "level": 29,
+      "nature": "adamant",
+      "ability": "intimidate",
+      "moveset": ["flamewheel", "bite", "roar", "odorsleuth"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 0, "atk": 4, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "ninetales",
+      "gender": "FEMALE",
+      "level": 30,
+      "nature": "timid",
+      "ability": "flashfire",
+      "moveset": ["flamethrower", "confuseray", "quickattack", "willowisp"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 0, "atk": 0, "def": 0, "spa": 4, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "rapidash",
+      "gender": "MALE",
+      "level": 31,
+      "nature": "jolly",
+      "ability": "flashfire",
+      "moveset": ["flareblitz", "furyattack", "stomp", "agility"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 0, "atk": 4, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "arcanine",
+      "gender": "MALE",
+      "level": 32,
+      "nature": "adamant",
+      "ability": "intimidate",
+      "moveset": ["flareblitz", "extremespeed", "crunch", "roar"],
+      "heldItem": "charcoal",
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 0, "atk": 4, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    }
+  ],
+  "battleFormat": "GEN_9_SINGLES"
+}

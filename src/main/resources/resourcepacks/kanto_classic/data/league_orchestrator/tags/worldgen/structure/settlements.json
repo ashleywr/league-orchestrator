@@ -1,0 +1,15 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:village",
+    { "id": "bca:village/default_small", "required": false },
+    { "id": "bca:village/default_mid", "required": false },
+    { "id": "bca:village/default_large", "required": false },
+    { "id": "bca:village/dark_small", "required": false },
+    { "id": "bca:village/dark_mid", "required": false },
+    { "id": "bca:village/fairy_small", "required": false },
+    { "id": "bca:village/fairy_mid", "required": false },
+    { "id": "bca:village/fighting_mid", "required": false },
+    { "id": "bca:village/fighting_large", "required": false }
+  ]
+}

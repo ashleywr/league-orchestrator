@@ -1,0 +1,14 @@
+{
+  "id": "league_orchestrator:frontier",
+  "mode": "procedural",
+  "seed_salt": "frontier-v1",
+  "gym_pool": "",
+  "fallback": true,
+  "priority": -1000,
+  "town_palettes": [],
+  "route_profiles": [],
+  "encounter_profiles": [],
+  "legendary_encounters": [],
+  "trainers": [],
+  "rewards": []
+}

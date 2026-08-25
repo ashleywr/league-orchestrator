@@ -1,0 +1,14 @@
+{
+  "id": "league_orchestrator:kanto_classic",
+  "mode": "fixed",
+  "seed_salt": "kanto-classic-v1",
+  "gym_pool": "kanto_badges",
+  "rct_series": "league_orchestrator_kanto",
+  "region_profiles": ["region_engine:kanto"],
+  "town_palettes": [],
+  "route_profiles": [],
+  "encounter_profiles": [],
+  "legendary_encounters": [],
+  "trainers": [],
+  "rewards": []
+}

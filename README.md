@@ -1,214 +1,97 @@
 # League Orchestrator
 
-League Orchestrator is a standalone Fabric 1.21.1 Cobblemon campaign layer. It
-requires Region Engine for deterministic continent/profile context and Cobblemon
-for wild-Pokémon spawn enforcement. It intentionally does **not** include a
-trainer battle engine, structure library, badge artwork, or Koyo branding.
+League Orchestrator is a server-side Fabric 1.21.1 campaign layer for
+Cobblemon worlds. Region Engine owns continental geography; League owns the
+saved campaign plan: settlement identity, gym allocation, route topology, and
+provider-owned leader state.
 
-## Current vertical slice
+League has hard runtime dependencies on Region Engine, Cobblemon, RCT API, and
+Radical Cobblemon Trainers. Every League world can therefore support trainers;
+an individual campaign may still be series-free or have no placed gyms.
 
-- Loads datapack-defined regional species pools and gym archetypes.
-- Cancels normal wild Cobblemon spawns that are not allowed by the active
-  Region Engine profile's `cobblemon.allow_species_tags` / `deny_species_tags`.
-- Treats an unresolved allow pool as a safe pass-through. A modpack can ship
-  Region Engine profiles before it ships the matching Pokémon content data.
-- Creates one saved, deterministic allocation ledger per world. Calling the
-  allocation service for a `(atlas site, slot, pool)` returns the same gym on
-  every later call, and a selected gym is removed from that pool within its
-  atlas site.
-- Registers named town anchors and automatically attempts one gym beside each
-  generated BCA town. The first structure bridge uses vanilla's `/place
-  structure` command against a datapack-declared structure ID, so it can place
-  Rad Gyms without a compile-time dependency on Rad Gyms.
-- Provides `/league info`, `/league site`, `/league claim <pool>`, and the
-  operator town commands below.
+It does not copy or replace third-party worldgen/assets. BCA and other
+structure mods may be observed through public structure IDs, while campaign
+content is supplied by normal datapacks.
 
-The automatic BCA test bridge waits for a completed town start, then queues one
-gym placement per server tick. It chooses a deterministic lot 128 blocks beyond
-one edge of the town's saved bounding box and preloads the bounded external
-structure area before using vanilla placement. This deliberately favors a
-visible, safe “town edge” result over silently overwriting BCA houses. BCA
-village starts are discovered automatically when their start chunk loads; the
-saved anchor records its real generated bounding box as the town zone. When
-RoadWeaver is installed, its public API registers each successfully placed gym
-at the actual post-placement coordinate and queues a short town-to-gym spur;
-Rad Gyms must not be added to RoadWeaver's static structure prediction list.
-RCT will be the first trainer bridge, using its public API rather than copied
-implementation.
+## Current runtime
 
-## Town gym workflow
+1. At server start, League opens its saved world plan, requeues saved roads and
+   eligible leaders, and predicts the atlas site containing spawn.
+2. As players enter continental atlas sites, a worker predicts tagged vanilla
+   structure starts from the actual structure-placement state. This reads no
+   terrain chunks or heightmaps.
+3. The server thread saves planned towns, gym allocations, and a deterministic
+   town-to-town route graph. It gives RoadWeaver only that graph's endpoints
+   and edges.
+4. When a relevant chunk naturally loads, League reconciles a predicted town
+   with its real structure bounding box. It queues a gym only for that already
+   realized town.
+5. At most one queued gym placement and one total optional-provider action are
+   processed per server end tick. RCT leaders require an already-loaded anchor
+   chunk and nearby player; they never force terrain generation.
 
-Natural gym worldgen should be disabled in Structurify when using this flow.
-RoadWeaver should connect town structures only; it should not treat gyms as
-separate road endpoints.
+The one intentional exception to prediction-only behavior is physical external
+gym placement: vanilla `/place structure` needs an adequately loaded placement
+area. This is deferred to a single gym job and may still be expensive. It is
+not part of town prediction or RCT leader recovery.
 
-For a generated BCA village, no registration command or placement command is
-needed. League Orchestrator observes the completed BCA structure start and
-records its bounding box on the server thread. A deterministic two-thirds of
-towns are eligible for a unique `kanto_badges` gym at their edge; the rest stay
-ordinary settlements and RoadWeaver destinations. The initial Kanto pool
-contains eight official badge slots, so a town never receives a duplicate.
+League filters normal wild Cobblemon spawns using Region Engine's regional
+allow/deny species pools. It does not yet implement route-level spawn
+replacement, level scaling, rewards, legendary triggers, or generic town
+building placement.
 
-Stand inside the town and run this diagnostic command:
+## RoadWeaver's role
 
-```mcfunction
-/league town nearest
-```
+League is authoritative for *which* places connect. RoadWeaver is an optional
+macro-route renderer for *how* a route crosses open terrain. Its public API
+accepts endpoints and connections, not building doors, port facings, or custom
+obstacle bounds. League therefore does not use it for town streets.
 
-It prints the stable generated town ID and lets an operator inspect the saved
-anchor. The manual command remains available to place a gym at a chosen plot if
-the automatic lot needs adjustment:
+The planned town system will own semantic building ports, aprons, and internal
+streets. RoadWeaver will connect only safe outer town gateways. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for the resulting boundary.
 
-```mcfunction
-/league town place bca_default_mid_12_-7 kanto_badges
-```
+To keep League authoritative for a new world, disable RoadWeaver's autonomous
+structure prediction and dynamic planning in its config. League's own bridge
+uses only RoadWeaver's public `registerStructureEndpoint` and
+`ensureConnection(..., false)` calls.
 
-The command uses the town's atlas site as its scope. A selected archetype cannot
-be assigned to any second town on that continent, and a placed town gym is saved
-with its exact position so it cannot be placed twice accidentally. To inspect or
-reserve the allocation before choosing a plot, use:
+## Content packs
 
-```mcfunction
-/league town gym bca_default_mid_12_-7 kanto_badges
-```
+Campaigns are regular server datapacks, resolved per Region Engine profile and
+persisted once a profile is first used. A specialist campaign supplies its own
+RCT series; `league_orchestrator:frontier` is the procedural fallback for all
+otherwise-unclaimed profiles.
 
-`/league town register <id>` remains available only for a player-built or
-third-party settlement that does not expose a detectable structure start.
+External structures must be original or redistribution-permitted content. A
+pack should keep an `ATTRIBUTION.md` recording each asset's author, source,
+license/permission, and required credit. A raw NBT template is not enough for
+the current external-gym path: it must be exposed as a registered vanilla
+structure. Future town modules will accept licensed NBT/jigsaw assets through
+their own explicit building/module definitions.
 
-`structure_tag` is currently a registered structure ID despite the historical
-field name. If its provider is absent or a plot is unsuitable, placement fails
-without recording a placed gym; the allocation remains reserved for that town
-and can be retried after fixing the problem.
+- [CONTENT_PACK_FORMAT.md](CONTENT_PACK_FORMAT.md) — implemented data formats
+  and reserved contracts.
+- [DATAPACK_POLICY.md](DATAPACK_POLICY.md) — ownership, provider, and asset
+  boundaries.
+- [INTEGRATION_CONTRACT.md](INTEGRATION_CONTRACT.md) — server-thread and
+  provider-failure rules.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — decisions, current event flow, and the
+  modular-town direction.
 
-## Content data
+## Operators
 
-Content belongs in a normal server datapack. `species_pools` are referenced by
-the exact resource ID already placed in Region Engine profiles.
-
-`data/region_engine/region_profiles/kanto.json`:
-
-```json
-{
-  "cobblemon": {
-    "allow_species_tags": ["league:kanto_native"],
-    "deny_species_tags": ["league:johto_native"]
-  }
-}
-```
-
-`data/league/league_orchestrator/species_pools/kanto_native.json`:
-
-```json
-{
-  "species": [
-    "cobblemon:bulbasaur",
-    "cobblemon:charmander",
-    "cobblemon:squirtle"
-  ]
-}
-```
-
-An allow list applies only after its corresponding pool has loaded. Add all
-forms/species wanted by the pack; the filter compares Cobblemon species IDs and
-does not infer a real-world region from a biome.
-
-Gym archetypes are intentionally separate from regional Pokémon pools:
-
-`data/league/league_orchestrator/gym_archetypes/verdant.json`:
-
-```json
-{
-  "pool": "starter_badges",
-  "region_profiles": ["region_engine:kanto", "region_engine:johto"],
-  "weight": 2,
-  "structure_tag": "league:verdant_gym",
-  "trainer": "rctmod:leader_example",
-  "badge": "league:verdant"
-}
-```
-
-If `starter_badges` has five entries and five Atlas sites claim that pool, each
-entry is allocated once. Use a single pool to emulate unique local leaders, or
-separate pools such as `fire_badges`, `water_badges`, and `grass_badges` to
-randomize independently by Pokémon type. The resolved allocation is stored in
-world saved data and is never normally reshuffled.
-
-## Kanto Classic built-in pack
-
-The mod includes the normal, opt-in **League Orchestrator — Kanto Classic
-regional profile and species policy** data pack. Enable it above Region Engine
-Atlas Test when creating a new world. It replaces only the `region_engine:kanto`
-profile, leaving every other continent available for a different regional pack.
-
-For the current built-in packs, data-pack priority from bottom to top is:
-
-1. Any Region Engine biome-compatibility packs for installed biome mods.
-2. **Region Engine — Atlas Test**.
-3. **League Orchestrator — Kanto Classic regional profile and species policy**.
-4. **League Orchestrator — BCA Kanto Towns** (when Cobblemon Additions is installed).
-5. **League Orchestrator — Content Compatibility** (when BCA and/or Radical Trainers are installed).
-
-Kanto Classic must be above Atlas Test because it overrides the base Kanto
-profile. BCA Kanto Towns must be above Kanto Classic because it overrides BCA's
-`minecraft:villages` structure set. Content Compatibility may sit above all of
-them because it touches only BCA and Radical Trainers resources. Select the
-packs before creating the world and do not alter the selected worldgen packs
-after chunks have generated.
-
-### Optional BCA Kanto towns
-
-The normal, opt-in **League Orchestrator — BCA Kanto Towns** pack is for packs
-that include Cobblemon Additions. It replaces BCA's generic village mix with a
-Kanto-focused mix that strongly favors mid-sized and large settlements, while
-leaving a few small settlements for texture. It also defines a sparse
-`league_orchestrator:wild_pokecenter` jigsaw structure that uses BCA's own
-Pokécenter template at runtime. These are genuine structures, not map markers:
-RoadWeaver may safely include the wild Pokécenter ID as an intermediate static
-endpoint. Its structure set excludes the village set, keeping these centers in
-the wild rather than on a town's doorstep.
-
-### Optional content compatibility
-
-The normal, opt-in **League Orchestrator — Content Compatibility** pack repairs
-two optional-content references in the current test stack without adding a
-dependency on either provider. It replaces BCA's missing CobbleNav fishing
-item-group loot with a small vanilla fishing kit, and replaces Radical Trainers'
-broken `common` parent table with a table that selects only the loot subtables
-present in the installed Radical Trainers jar. Enable it above the provider
-packs when those mods are installed. It does not fabricate Mega Showdown items
-for a handful of Radical Trainer definitions; install Mega Showdown to enable
-those optional held-item loadouts. Without it, Radical Trainers logs the
-provider-side validation warnings and omits those unavailable held items.
-
-Kanto Classic uses a temperate Tokyo/Kanto-inspired palette: plains, forests,
-river valleys, beaches, wetlands, and modest windswept/stony mountains. It
-deliberately excludes jungle, desert, badlands, taiga, frozen, and ice biomes.
-Its profile terrain favors mixed lowlands and mountains while minimizing large
-inland lakes.
-
-The initial species policy contains the 146 non-mythical Generation-I Cobblemon
-species. Articuno, Zapdos, Moltres, and Mewtwo are denied to normal wild spawns
-and reserved for future structure encounters; Mew is not included in the normal
-Kanto encounter policy. This is a regional eligibility layer, not a copied
-FireRed/LeafGreen or HeartGold/SoulSilver encounter table: it prevents unrelated
-species from leaking in, but does not invent a spawn entry where Cobblemon has
-none. The next content pass will supply original habitat/route-tier spawn pools
-and the separately curated HeartGold/SoulSilver Kanto extension set.
-
-Kanto Classic also supplies eight `kanto_badges` gym archetypes—rock, water,
-electric, grass, poison, psychic, fire, and ground—each pointing to the matching
-Rad Gyms entrance structure. They are not naturally generated by League
-Orchestrator: use the discovered BCA town workflow to place one at a chosen town
-plot. This is a data reference to Rad Gyms' public structure IDs,
-not copied gym content.
+`/league info`, `/league site`, and `/league town nearest` expose the saved
+campaign/town state. `/league integration status` reports the bounded provider
+queue. A degraded gym leader can be inspected with
+`/league town leader <id> status` and explicitly reconciled again with
+`/league town leader <id> reset`.
 
 ## Development
-
-This inner repository is intentionally separate from Region Engine and Koyo.
-The local build uses development-only compile contracts for the adjacent Region
-Engine build and a user-supplied Cobblemon 1.7.3 jar; neither is embedded in
-the output.
 
 ```powershell
 .\gradlew.bat clean build --no-daemon -Pcobblemon_dev_jar="C:\path\to\Cobblemon-fabric-1.7.3+1.21.1.jar"
 ```
+
+The adjacent Region Engine build and supplied Cobblemon jar are development
+contracts only; neither is embedded in the output.

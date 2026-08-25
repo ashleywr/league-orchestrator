@@ -1,0 +1,10 @@
+{
+  "title": {
+    "text": "Kanto League"
+  },
+  "description": {
+    "text": "League Orchestrator's Kanto campaign series."
+  },
+  "difficulty": 5,
+  "requiredSeries": []
+}

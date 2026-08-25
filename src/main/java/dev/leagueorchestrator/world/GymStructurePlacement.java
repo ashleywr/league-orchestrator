@@ -5,6 +5,7 @@ import dev.leagueorchestrator.LeagueOrchestrator;
 import dev.leagueorchestrator.data.GymArchetype;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
@@ -28,8 +29,16 @@ public final class GymStructurePlacement {
     private GymStructurePlacement() {}
 
     public static boolean place(ServerLevel level, BlockPos position, GymArchetype gym) {
+        return place(level, position, Direction.NORTH, gym);
+    }
+
+    public static boolean place(ServerLevel level, BlockPos position, Direction front, GymArchetype gym) {
         ResourceLocation structure = ResourceLocation.tryParse(gym.structureTag());
         if (structure == null) return false;
+
+        if (structure.getNamespace().equals(LeagueOrchestrator.MOD_ID) && structure.getPath().equals("village_gym")) {
+            return VillageGymBuilder.place(level, position, front, gym);
+        }
 
         preloadPlacementArea(level, position, EXTERNAL_STRUCTURE_LOAD_RADIUS);
 
@@ -50,6 +59,19 @@ public final class GymStructurePlacement {
                     structure, position.toShortString(), exception.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Returns only an author-declared leader anchor. League never guesses an
+     * interior position for a third-party structure.
+     */
+    public static BlockPos leaderPosition(BlockPos origin, Direction front, GymArchetype gym) {
+        ResourceLocation structure = ResourceLocation.tryParse(gym.structureTag());
+        if (structure != null && structure.getNamespace().equals(LeagueOrchestrator.MOD_ID)
+                && structure.getPath().equals("village_gym")) {
+            return VillageGymBuilder.leaderPosition(origin, front);
+        }
+        return gym.leaderOffset() == null ? null : origin.offset(gym.leaderOffset());
     }
 
     private static void preloadPlacementArea(ServerLevel level, BlockPos center, int radius) {

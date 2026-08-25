@@ -1,0 +1,44 @@
+{
+  "name": "Gym Leader Koga",
+  "identity": "Kanto Poison-type Gym Leader",
+  "ai": {
+    "type": "rct",
+    "data": {
+      "maxSelectMargin": 0.15
+    }
+  },
+  "team": [
+    {
+      "species": "koffing",
+      "gender": "MALE",
+      "level": 22,
+      "nature": "bold",
+      "ability": "levitate",
+      "moveset": ["sludge", "smog", "selfdestruct", "toxic"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 4, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "muk",
+      "gender": "MALE",
+      "level": 23,
+      "nature": "adamant",
+      "ability": "poisontouch",
+      "moveset": ["sludgebomb", "minimize", "acidarmor", "poisongas"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 4, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "weezing",
+      "gender": "MALE",
+      "level": 24,
+      "nature": "bold",
+      "ability": "levitate",
+      "moveset": ["sludgebomb", "smokescreen", "painsplit", "toxic"],
+      "heldItem": "black_sludge",
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 4, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    }
+  ],
+  "battleFormat": "GEN_9_SINGLES"
+}

@@ -1,0 +1,44 @@
+{
+  "name": "Gym Leader Misty",
+  "identity": "Kanto Water-type Gym Leader",
+  "ai": {
+    "type": "rct",
+    "data": {
+      "maxSelectMargin": 0.15
+    }
+  },
+  "team": [
+    {
+      "species": "goldeen",
+      "gender": "FEMALE",
+      "level": 13,
+      "nature": "jolly",
+      "ability": "swiftswim",
+      "moveset": ["watergun", "peck", "supersonic", "horndrill"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 4 }
+    },
+    {
+      "species": "staryu",
+      "gender": "GENDERLESS",
+      "level": 14,
+      "nature": "modest",
+      "ability": "naturalcure",
+      "moveset": ["watergun", "rapidspin", "swift", "recover"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 0, "atk": 0, "def": 0, "spa": 4, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "starmie",
+      "gender": "GENDERLESS",
+      "level": 15,
+      "nature": "timid",
+      "ability": "naturalcure",
+      "moveset": ["surf", "psybeam", "rapidspin", "recover"],
+      "heldItem": "mystic_water",
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 0, "atk": 0, "def": 0, "spa": 4, "spd": 0, "spe": 0 }
+    }
+  ],
+  "battleFormat": "GEN_9_SINGLES"
+}

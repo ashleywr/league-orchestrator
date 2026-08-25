@@ -2,6 +2,7 @@ package dev.leagueorchestrator.world;
 
 import dev.leagueorchestrator.LeagueOrchestrator;
 import dev.leagueorchestrator.data.GymArchetype;
+import dev.leagueorchestrator.data.LeagueDataReloadListener;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -15,13 +16,12 @@ import java.util.Queue;
 import java.util.Set;
 
 /**
- * Defers automatic gym construction until after a completed town structure has
- * reached the server thread. One placement is attempted per tick to avoid
- * recursive worldgen while a burst of town chunks arrives together.
+ * Defers gym construction until a previously predicted settlement has exposed
+ * its completed bounding box. One placement is attempted per tick to avoid
+ * recursive worldgen while a burst of realized structures arrives together.
  */
 public final class AutoTownGymPlacement {
-    private static final String KANTO_POOL = "kanto_badges";
-    private static final int LOT_CLEARANCE = 128;
+    private static final int LOT_CLEARANCE = 40;
     /**
      * Towns are the road network; only a deterministic subset becomes a gym
      * destination. At the current Kanto town density this normally leaves a
@@ -50,21 +50,34 @@ public final class AutoTownGymPlacement {
         if (town == null) return;
         if (town.gymPosition() != null) return;
         if (!isGymEligible(request.level(), town)) return;
-        Optional<GymArchetype> gym = plan.gymForTown(request.level(), town, KANTO_POOL);
+        String gymPool = plan.campaignFor(request.level(), town.center())
+                .map(dev.leagueorchestrator.data.CampaignDefinition::gymPool)
+                .orElse("");
+        if (gymPool.isBlank()) return;
+        Optional<GymArchetype> gym = plan.gymForTown(request.level(), town, gymPool);
         if (gym.isEmpty()) return;
 
-        BlockPos lot = lotFor(request.level(), town);
-        if (GymStructurePlacement.place(request.level(), lot, gym.get())) {
-            plan.markGymPlaced(town, lot);
+        BlockPos lot = null;
+        for (int attempt = 0; attempt < 4; attempt++) {
+            BlockPos candidate = lotFor(request.level(), town, attempt);
+            if (GymStructurePlacement.place(request.level(), candidate, frontToward(candidate, town.center()), gym.get())) {
+                lot = candidate;
+                break;
+            }
+        }
+        if (lot != null) {
+            BlockPos leaderPosition = GymStructurePlacement.leaderPosition(lot, frontToward(lot, town.center()), gym.get());
+            plan.markGymPlaced(town, lot, leaderPosition, !gym.get().trainerId().isBlank());
             RoadWeaverBridge.connectPlacedGym(request.level(), town, lot, gym.get());
+            RctGymLeaderBridge.enqueue(request.level(), town, gym.get());
             LeagueOrchestrator.LOGGER.info("Placed {} beside generated town {} at {}.", gym.get().id(), town.id(), lot.toShortString());
         } else {
-            LeagueOrchestrator.LOGGER.warn("Could not place {} beside generated town {} at {}. Its allocation remains reserved.",
-                    gym.get().id(), town.id(), lot.toShortString());
+            LeagueOrchestrator.LOGGER.warn("Could not find a clear compact lot beside generated town {} for {}. Its allocation remains reserved.",
+                    town.id(), gym.get().id());
         }
     }
 
-    private static boolean isGymEligible(ServerLevel level, TownAnchor town) {
+    static boolean isGymEligible(ServerLevel level, TownAnchor town) {
         long hash = level.getSeed()
                 ^ ((long) town.siteX() * 0x9E3779B97F4A7C15L)
                 ^ ((long) town.siteZ() * 0xC2B2AE3D27D4EB4FL)
@@ -76,11 +89,11 @@ public final class AutoTownGymPlacement {
                 < GYM_TOWN_ELIGIBILITY_NUMERATOR;
     }
 
-    private static BlockPos lotFor(ServerLevel level, TownAnchor town) {
+    private static BlockPos lotFor(ServerLevel level, TownAnchor town, int attempt) {
         BoundingBox bounds = town.bounds();
         if (bounds == null) return town.center();
 
-        int choice = Math.floorMod((int) (level.getSeed() ^ town.id().hashCode()), 4);
+        int choice = Math.floorMod((int) (level.getSeed() ^ town.id().hashCode()) + attempt, 4);
         int x = (bounds.minX() + bounds.maxX()) / 2;
         int z = (bounds.minZ() + bounds.maxZ()) / 2;
         switch (choice) {
@@ -94,6 +107,14 @@ public final class AutoTownGymPlacement {
         // reports the minimum build height (-64) and the jigsaw command fails.
         level.getChunk(x >> 4, z >> 4);
         return new BlockPos(x, level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z), z);
+    }
+
+    private static net.minecraft.core.Direction frontToward(BlockPos from, BlockPos to) {
+        int deltaX = to.getX() - from.getX();
+        int deltaZ = to.getZ() - from.getZ();
+        if (Math.abs(deltaX) > Math.abs(deltaZ)) return deltaX > 0
+                ? net.minecraft.core.Direction.EAST : net.minecraft.core.Direction.WEST;
+        return deltaZ > 0 ? net.minecraft.core.Direction.SOUTH : net.minecraft.core.Direction.NORTH;
     }
 
     private record Request(ServerLevel level, TownAnchor town, String key) {}

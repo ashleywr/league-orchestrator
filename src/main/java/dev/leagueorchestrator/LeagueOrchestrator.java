@@ -4,13 +4,15 @@ import com.cobblemon.mod.common.api.events.CobblemonEvents;
 import dev.leagueorchestrator.data.LeagueDataReloadListener;
 import dev.leagueorchestrator.spawn.RegionalSpawnFilter;
 import dev.leagueorchestrator.world.LeagueCommands;
-import dev.leagueorchestrator.world.BcaTownDiscovery;
 import dev.leagueorchestrator.world.AutoTownGymPlacement;
+import dev.leagueorchestrator.world.RoadWeaverBridge;
+import dev.leagueorchestrator.world.RctGymLeaderBridge;
+import dev.leagueorchestrator.world.SettlementPredictor;
+import dev.leagueorchestrator.world.SettlementRealization;
 import dev.leagueorchestrator.world.WorldLeaguePlan;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.fabric.api.resource.ResourcePackActivationType;
@@ -35,25 +37,28 @@ public final class LeagueOrchestrator implements ModInitializer {
                 FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
                 ResourcePackActivationType.NORMAL
         );
-        ResourceManagerHelper.registerBuiltinResourcePack(
-                ResourceLocation.fromNamespaceAndPath(MOD_ID, "content_compat"),
-                FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
-                ResourcePackActivationType.NORMAL
-        );
-        ResourceManagerHelper.registerBuiltinResourcePack(
-                ResourceLocation.fromNamespaceAndPath(MOD_ID, "bca_kanto_towns"),
-                FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
-                ResourcePackActivationType.NORMAL
-        );
         ResourceManagerHelper.get(PackType.SERVER_DATA)
                 .registerReloadListener(new LeagueDataReloadListener());
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             WorldLeaguePlan.ensureAllOverworldPlans(server);
-            WorldLeaguePlan.reconcileRoadWeaverGyms(server);
+            WorldLeaguePlan.reconcileRoadWeaverCampaign(server);
+            WorldLeaguePlan.reconcileRctGymLeaders(server);
+            SettlementPredictor.planSpawnSite(server);
         });
-        ServerChunkEvents.CHUNK_LOAD.register(BcaTownDiscovery::discover);
-        ServerChunkEvents.CHUNK_GENERATE.register(BcaTownDiscovery::discover);
-        ServerTickEvents.END_SERVER_TICK.register(AutoTownGymPlacement::tick);
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            SettlementPredictor.stop();
+            RoadWeaverBridge.stop();
+            RctGymLeaderBridge.stop();
+        });
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_LOAD.register((level, chunk) -> {
+            SettlementRealization.realize(level, chunk);
+            WorldLeaguePlan.reconcileRctGymLeadersInChunk(level, chunk);
+        });
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            SettlementPredictor.planPlayerSites(server);
+            AutoTownGymPlacement.tick(server);
+            RctGymLeaderBridge.tick(server);
+        });
         CommandRegistrationCallback.EVENT.register(LeagueCommands::register);
         CobblemonEvents.POKEMON_ENTITY_SPAWN.subscribe(RegionalSpawnFilter::filter);
     }

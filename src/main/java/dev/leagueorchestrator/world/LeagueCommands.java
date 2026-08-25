@@ -5,12 +5,16 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import dev.leagueorchestrator.data.GymArchetype;
 import dev.leagueorchestrator.data.LeagueDataReloadListener;
+import dev.leagueorchestrator.provider.ProviderRegistry;
+import dev.leagueorchestrator.provider.ProviderIntegrationCoordinator;
 import dev.regionengine.policy.RegionPolicyService;
 import dev.regionengine.world.atlas.AtlasRegion;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.Optional;
@@ -24,6 +28,8 @@ public final class LeagueCommands {
         dispatcher.register(Commands.literal("league")
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("info").executes(LeagueCommands::info))
+                .then(Commands.literal("integration")
+                        .then(Commands.literal("status").executes(LeagueCommands::integrationStatus)))
                 .then(Commands.literal("site").executes(LeagueCommands::site))
                 .then(Commands.literal("claim")
                         .then(Commands.argument("pool", StringArgumentType.word())
@@ -37,6 +43,10 @@ public final class LeagueCommands {
                                 .then(Commands.argument("id", StringArgumentType.word())
                                         .then(Commands.argument("pool", StringArgumentType.word())
                                                 .executes(LeagueCommands::assignTownGym))))
+                        .then(Commands.literal("leader")
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .then(Commands.literal("status").executes(LeagueCommands::leaderStatus))
+                                        .then(Commands.literal("reset").executes(LeagueCommands::resetLeader))))
                         .then(Commands.literal("place")
                                 .then(Commands.argument("id", StringArgumentType.word())
                                         .then(Commands.argument("pool", StringArgumentType.word())
@@ -46,7 +56,17 @@ public final class LeagueCommands {
     private static int info(CommandContext<CommandSourceStack> context) {
         context.getSource().sendSuccess(() -> Component.literal(
                 "League Orchestrator: " + LeagueDataReloadListener.current().allGyms().size()
-                        + " gym archetypes, " + LeagueDataReloadListener.current().speciesPools().size() + " species pools."), false);
+                        + " gym archetypes, " + LeagueDataReloadListener.current().speciesPools().size() + " species pools, "
+                        + LeagueDataReloadListener.current().townPalettes().size() + " town palettes, "
+                        + LeagueDataReloadListener.current().routeProfiles().size() + " route profiles, "
+                        + LeagueDataReloadListener.current().encounterProfiles().size() + " encounter profiles, and "
+                        + LeagueDataReloadListener.current().legendaryEncounters().size() + " legendary definitions. "
+                        + "Campaign: " + WorldLeaguePlan.get(context.getSource().getLevel())
+                        .campaignIdFor(context.getSource().getLevel(), net.minecraft.core.BlockPos.containing(context.getSource().getPosition()))
+                        .map(Object::toString).orElse("none") + "; RCT series: " + WorldLeaguePlan.get(context.getSource().getLevel())
+                        .rctSeriesIdFor(context.getSource().getLevel(), net.minecraft.core.BlockPos.containing(context.getSource().getPosition()))
+                        .orElse("none") + "; providers: "
+                        + String.join(", ", ProviderRegistry.installedKnownProviders().keySet()) + "."), false);
         return 1;
     }
 
@@ -57,6 +77,15 @@ public final class LeagueCommands {
         context.getSource().sendSuccess(() -> Component.literal(
                 "Atlas " + atlas.kind().name().toLowerCase() + " site " + atlas.cellX() + "," + atlas.cellZ()
                         + " uses profile " + profile + "."), false);
+        return 1;
+    }
+
+    private static int integrationStatus(CommandContext<CommandSourceStack> context) {
+        ProviderIntegrationCoordinator.Status status = ProviderIntegrationCoordinator.status();
+        context.getSource().sendSuccess(() -> Component.literal("Provider integration: " + status.pending() + "/"
+                + status.capacity() + " pending; " + status.openCircuits() + " operation circuits open; "
+                + status.rejectedCapacity() + " capacity deferrals; " + status.completed() + " completed; "
+                + status.degraded() + " degraded."), false);
         return 1;
     }
 
@@ -89,7 +118,7 @@ public final class LeagueCommands {
                 .nearestTown(player.serverLevel(), player.blockPosition(), 384.0);
         context.getSource().sendSuccess(() -> Component.literal(town
                 .map(value -> "Nearest town: '" + value.id() + "' at " + value.center().toShortString()
-                        + (value.bounds() == null ? " (manual anchor)." : " (BCA zone registered)."))
+                        + (value.bounds() == null ? " (planned or manual anchor)." : " (realized settlement zone)."))
                 .orElse("No League town is registered within 384 blocks in this atlas site.")), false);
         return town.isPresent() ? 1 : 0;
     }
@@ -132,14 +161,55 @@ public final class LeagueCommands {
             context.getSource().sendFailure(Component.literal("No unused gym from pool " + pool + " is valid for this town."));
             return 0;
         }
-        if (!GymStructurePlacement.place(player.serverLevel(), player.blockPosition(), gym.get())) {
+        if (!GymStructurePlacement.place(player.serverLevel(), player.blockPosition(), player.getDirection(), gym.get())) {
             context.getSource().sendFailure(Component.literal("Could not place " + gym.get().structureTag()
                     + ". Confirm that its structure provider is installed and that the plot is clear."));
             return 0;
         }
-        plan.markGymPlaced(town.get(), player.blockPosition());
+        BlockPos leaderPosition = GymStructurePlacement.leaderPosition(player.blockPosition(), player.getDirection(), gym.get());
+        plan.markGymPlaced(town.get(), player.blockPosition(), leaderPosition, !gym.get().trainerId().isBlank());
+        RctGymLeaderBridge.enqueue(player.serverLevel(), town.get(), gym.get());
         context.getSource().sendSuccess(() -> Component.literal("Placed " + gym.get().id() + " for town '" + townId
                 + "' at " + player.blockPosition().toShortString() + "."), true);
+        return 1;
+    }
+
+    private static int leaderStatus(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String townId = StringArgumentType.getString(context, "id");
+        Optional<TownAnchor> town = WorldLeaguePlan.get(player.serverLevel()).townAt(player.serverLevel(), player.blockPosition(), townId);
+        if (town.isEmpty() || town.get().gymLeaderPosition() == null) {
+            context.getSource().sendFailure(Component.literal("Town '" + townId + "' has no authored gym-leader anchor in this atlas site."));
+            return 0;
+        }
+        TownAnchor anchor = town.get();
+        String suffix = anchor.gymLeaderFailure().isBlank() ? "" : " Reason: " + anchor.gymLeaderFailure();
+        context.getSource().sendSuccess(() -> Component.literal("Gym leader for '" + townId + "': " + anchor.gymLeaderState()
+                + " at " + anchor.gymLeaderPosition().toShortString() + "; UUID: "
+                + (anchor.gymLeaderUuid() == null ? "none" : anchor.gymLeaderUuid()) + "." + suffix), false);
+        return 1;
+    }
+
+    private static int resetLeader(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String townId = StringArgumentType.getString(context, "id");
+        WorldLeaguePlan plan = WorldLeaguePlan.get(player.serverLevel());
+        Optional<TownAnchor> town = plan.townAt(player.serverLevel(), player.blockPosition(), townId);
+        if (town.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("No registered town named '" + townId + "' exists in this atlas site."));
+            return 0;
+        }
+        Optional<TownAnchor> reset = plan.resetGymLeader(town.get());
+        if (reset.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("Only a DEGRADED gym leader with an authored anchor can be reset."));
+            return 0;
+        }
+        ResourceLocation gymId = ResourceLocation.tryParse(plan.allocationAt(player.serverLevel(), reset.get().center(),
+                "town:" + reset.get().id()).orElse(""));
+        GymArchetype gym = gymId == null ? null : LeagueDataReloadListener.current().gymArchetypes().get(gymId);
+        if (gym != null) RctGymLeaderBridge.enqueue(player.serverLevel(), reset.get(), gym);
+        context.getSource().sendSuccess(() -> Component.literal("Reset leader state for '" + townId
+                + "'. League will reconcile an exact RCT trainer before any new spawn."), true);
         return 1;
     }
 }

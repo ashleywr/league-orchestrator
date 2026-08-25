@@ -1,7 +1,7 @@
 {
   "pool": "kanto_badges",
   "region_profiles": ["region_engine:kanto"],
-  "structure_tag": "rad_gyms:gym_entrance_electric",
-  "trainer": "league_orchestrator:kanto_electric_leader",
+  "structure_tag": "league_orchestrator:village_gym",
+  "trainer": "kanto_leader_ltsurge",
   "badge": "league_orchestrator:kanto_electric"
 }

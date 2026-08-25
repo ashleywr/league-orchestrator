@@ -2,66 +2,177 @@ package dev.leagueorchestrator.world;
 
 import dev.leagueorchestrator.LeagueOrchestrator;
 import dev.leagueorchestrator.data.GymArchetype;
+import dev.leagueorchestrator.provider.ProviderIntegrationCoordinator;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 import java.lang.reflect.Method;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
- * Optional RoadWeaver hand-off for real, post-worldgen gym placements.
- *
- * RoadWeaver's static structure prediction cannot know that a gym has been
- * allocated to a particular town. Its public API can, however, register the
- * resulting endpoint and a direct town-to-gym connection. Reflection keeps
- * this module loadable in packs that do not include RoadWeaver.
+ * Narrow, optional RoadWeaver adapter. League owns the deterministic graph;
+ * RoadWeaver receives only its already-selected endpoints and edges through
+ * the shared provider coordinator.
  */
 public final class RoadWeaverBridge {
     private static final String API_CLASS = "net.shiroha233.roadweaver.api.RoadNetworkApi";
+    private static final Set<String> PUBLISHED_ENDPOINTS = new HashSet<>();
+    private static final Set<String> PUBLISHED_ROUTES = new HashSet<>();
+
+    private static ApiMethods api;
     private static boolean unavailable;
 
     private RoadWeaverBridge() {}
 
+    /** Publishes a deterministic town endpoint before that town's chunks need to exist. */
+    public static void publishTown(ServerLevel level, TownAnchor town) {
+        submitEndpoint(level, townEndpoint(town), "league_orchestrator:town/" + town.id());
+    }
+
+    /** Queues one explicit campaign route. RoadWeaver's false argument preserves its asynchronous renderer. */
+    public static void connectCampaignRoute(ServerLevel level, String routeId, TownAnchor from, TownAnchor to) {
+        if (!isOverworld(level)) return;
+        BlockPos fromPosition = townEndpoint(from);
+        BlockPos toPosition = townEndpoint(to);
+        submitEndpoint(level, fromPosition, "league_orchestrator:town/" + from.id());
+        submitEndpoint(level, toPosition, "league_orchestrator:town/" + to.id());
+        submitRoute(level, fromPosition, toPosition, "campaign:" + routeId);
+    }
+
+    /** Queues the controlled, short road spur from a known town to its placed gym. */
     public static void connectPlacedGym(ServerLevel level, TownAnchor town, BlockPos gymPosition, GymArchetype gym) {
-        if (unavailable || level != level.getServer().overworld()) return;
-        try {
-            Class<?> api = Class.forName(API_CLASS);
-            Method register = api.getMethod("registerStructureEndpoint", ServerLevel.class, BlockPos.class, String.class, boolean.class);
-            Method connect = api.getMethod("ensureConnection", ServerLevel.class, BlockPos.class, BlockPos.class, boolean.class);
+        if (!isOverworld(level)) return;
+        BlockPos townPosition = townEndpoint(town);
+        BlockPos gymEndpoint = horizontal(gymPosition);
+        submitEndpoint(level, townPosition, "league_orchestrator:town/" + town.id());
+        submitEndpoint(level, gymEndpoint, "league_orchestrator:gym/" + town.id() + "/" + gym.id().getPath());
+        submitRoute(level, townPosition, gymEndpoint, "gym:" + town.id() + "/" + gym.id());
+    }
 
-            BlockPos townGate = townGate(level, town, gymPosition);
-            register.invoke(null, level, townGate, "League town: " + town.id(), false);
-            register.invoke(null, level, gymPosition, "League gym: " + gym.id(), false);
-            // false leaves the short spur in RoadWeaver's normal async queue,
-            // avoiding a second expensive worldgen operation in this tick.
-            connect.invoke(null, level, townGate, gymPosition, false);
-            LeagueOrchestrator.LOGGER.info("Registered RoadWeaver spur from town {} to {} at {}.",
-                    town.id(), gym.id(), gymPosition.toShortString());
-        } catch (ClassNotFoundException exception) {
-            unavailable = true;
-        } catch (ReflectiveOperationException | LinkageError exception) {
-            unavailable = true;
-            LeagueOrchestrator.LOGGER.warn("RoadWeaver API is unavailable; gym {} remains reachable from its town without a generated spur.",
-                    gym.id(), exception);
+    /** Clears only process-local cache when an integrated server stops. */
+    public static synchronized void stop() {
+        PUBLISHED_ENDPOINTS.clear();
+        PUBLISHED_ROUTES.clear();
+        api = null;
+        unavailable = false;
+    }
+
+    private static void submitEndpoint(ServerLevel level, BlockPos position, String label) {
+        if (!isOverworld(level) || isUnavailable()) return;
+        EndpointIntent intent = new EndpointIntent(level.dimension().location(), position, label);
+        if (!isEndpointPublished(intent.key()) && !ProviderIntegrationCoordinator.submit(new EndpointAction(intent))) {
+            LeagueOrchestrator.LOGGER.debug("RoadWeaver endpoint {} deferred because the integration queue is full.", intent.key());
         }
     }
 
-    private static BlockPos townGate(ServerLevel level, TownAnchor town, BlockPos gymPosition) {
-        BoundingBox bounds = town.bounds();
-        if (bounds == null) return town.center();
-
-        int centerX = (bounds.minX() + bounds.maxX()) / 2;
-        int centerZ = (bounds.minZ() + bounds.maxZ()) / 2;
-        int x;
-        int z;
-        if (Math.abs(gymPosition.getX() - centerX) >= Math.abs(gymPosition.getZ() - centerZ)) {
-            x = gymPosition.getX() < centerX ? bounds.minX() - 8 : bounds.maxX() + 8;
-            z = centerZ;
-        } else {
-            x = centerX;
-            z = gymPosition.getZ() < centerZ ? bounds.minZ() - 8 : bounds.maxZ() + 8;
+    private static void submitRoute(ServerLevel level, BlockPos from, BlockPos to, String routeId) {
+        if (!isOverworld(level) || isUnavailable()) return;
+        RouteIntent intent = new RouteIntent(level.dimension().location(), from, to, routeId);
+        if (!isRoutePublished(intent.key()) && !ProviderIntegrationCoordinator.submit(new RouteAction(intent))) {
+            LeagueOrchestrator.LOGGER.debug("RoadWeaver route {} deferred because the integration queue is full.", intent.key());
         }
-        return new BlockPos(x, level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z), z);
     }
+
+    private static final class EndpointAction implements ProviderIntegrationCoordinator.ServerAction {
+        private final EndpointIntent intent;
+
+        private EndpointAction(EndpointIntent intent) {
+            this.intent = intent;
+        }
+
+        @Override public String key() { return intent.key(); }
+        @Override public String providerId() { return "roadweaver"; }
+        @Override public String operationId() { return "register_endpoint"; }
+
+        @Override
+        public ProviderIntegrationCoordinator.ActionResult execute(MinecraftServer server) throws Exception {
+            if (!isOverworld(server, intent.dimension()) || isUnavailable() || isEndpointPublished(intent.key())) {
+                return ProviderIntegrationCoordinator.ActionResult.DROP;
+            }
+            api().register().invoke(null, server.overworld(), intent.position(), intent.label(), false);
+            markEndpointPublished(intent.key());
+            return ProviderIntegrationCoordinator.ActionResult.COMPLETE;
+        }
+
+        @Override
+        public void onFailure(MinecraftServer server, Throwable throwable) {
+            disable(throwable);
+        }
+    }
+
+    private static final class RouteAction implements ProviderIntegrationCoordinator.ServerAction {
+        private final RouteIntent intent;
+
+        private RouteAction(RouteIntent intent) {
+            this.intent = intent;
+        }
+
+        @Override public String key() { return intent.key(); }
+        @Override public String providerId() { return "roadweaver"; }
+        @Override public String operationId() { return "ensure_connection"; }
+
+        @Override
+        public ProviderIntegrationCoordinator.ActionResult execute(MinecraftServer server) throws Exception {
+            if (!isOverworld(server, intent.dimension()) || isUnavailable() || isRoutePublished(intent.key())) {
+                return ProviderIntegrationCoordinator.ActionResult.DROP;
+            }
+            // Do not change this to true: true invokes RoadWeaver generation
+            // immediately, which would create a worldgen stall.
+            api().connect().invoke(null, server.overworld(), intent.from(), intent.to(), false);
+            markRoutePublished(intent.key());
+            LeagueOrchestrator.LOGGER.info("Queued RoadWeaver route {} from {} to {}.",
+                    intent.routeId(), intent.from().toShortString(), intent.to().toShortString());
+            return ProviderIntegrationCoordinator.ActionResult.COMPLETE;
+        }
+
+        @Override
+        public void onFailure(MinecraftServer server, Throwable throwable) {
+            disable(throwable);
+        }
+    }
+
+    private static synchronized ApiMethods api() throws ReflectiveOperationException {
+        if (api != null) return api;
+        Class<?> type = Class.forName(API_CLASS);
+        api = new ApiMethods(
+                type.getMethod("registerStructureEndpoint", ServerLevel.class, BlockPos.class, String.class, boolean.class),
+                type.getMethod("ensureConnection", ServerLevel.class, BlockPos.class, BlockPos.class, boolean.class)
+        );
+        return api;
+    }
+
+    private static synchronized boolean isUnavailable() { return unavailable; }
+    private static synchronized boolean isEndpointPublished(String key) { return PUBLISHED_ENDPOINTS.contains(key); }
+    private static synchronized boolean isRoutePublished(String key) { return PUBLISHED_ROUTES.contains(key); }
+    private static synchronized void markEndpointPublished(String key) { PUBLISHED_ENDPOINTS.add(key); }
+    private static synchronized void markRoutePublished(String key) { PUBLISHED_ROUTES.add(key); }
+
+    private static synchronized void disable(Throwable exception) {
+        unavailable = true;
+        LeagueOrchestrator.LOGGER.warn("RoadWeaver API failed; League keeps its campaign ledger and stops automatic RoadWeaver calls until restart.", exception);
+    }
+
+    private static boolean isOverworld(ServerLevel level) {
+        return level == level.getServer().overworld();
+    }
+
+    private static boolean isOverworld(MinecraftServer server, ResourceLocation dimension) {
+        return server.overworld().dimension().location().equals(dimension);
+    }
+
+    private static BlockPos townEndpoint(TownAnchor town) { return horizontal(town.routeEndpoint()); }
+    private static BlockPos horizontal(BlockPos position) { return new BlockPos(position.getX(), 0, position.getZ()); }
+
+    private record EndpointIntent(ResourceLocation dimension, BlockPos position, String label) {
+        private String key() { return "roadweaver|endpoint|" + dimension + "|" + position.asLong(); }
+    }
+
+    private record RouteIntent(ResourceLocation dimension, BlockPos from, BlockPos to, String routeId) {
+        private String key() { return "roadweaver|route|" + dimension + "|" + routeId; }
+    }
+
+    private record ApiMethods(Method register, Method connect) {}
 }

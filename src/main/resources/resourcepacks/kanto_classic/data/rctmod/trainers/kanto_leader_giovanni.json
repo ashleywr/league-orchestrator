@@ -1,0 +1,65 @@
+{
+  "name": "Gym Leader Giovanni",
+  "identity": "Kanto Ground-type Gym Leader",
+  "ai": {
+    "type": "rct",
+    "data": {
+      "maxSelectMargin": 0.15
+    }
+  },
+  "team": [
+    {
+      "species": "nidoqueen",
+      "gender": "FEMALE",
+      "level": 37,
+      "nature": "adamant",
+      "ability": "sheerforce",
+      "moveset": ["earthquake", "poisonjab", "bodyslam", "superpower"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 4, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "nidoking",
+      "gender": "MALE",
+      "level": 37,
+      "nature": "adamant",
+      "ability": "sheerforce",
+      "moveset": ["earthquake", "poisonjab", "megahorn", "superpower"],
+      "heldItem": "soft_sand",
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 0, "atk": 4, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "dugtrio",
+      "gender": "MALE",
+      "level": 38,
+      "nature": "jolly",
+      "ability": "sandveil",
+      "moveset": ["earthquake", "stoneedge", "suckerpunch", "screech"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 0, "atk": 4, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "rhydon",
+      "gender": "MALE",
+      "level": 38,
+      "nature": "adamant",
+      "ability": "rockhead",
+      "moveset": ["earthquake", "stoneedge", "megahorn", "hornattack"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 4, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "kangaskhan",
+      "gender": "FEMALE",
+      "level": 40,
+      "nature": "adamant",
+      "ability": "scrappy",
+      "moveset": ["earthquake", "doubleedge", "suckerpunch", "crunch"],
+      "heldItem": "scope_lens",
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 4, "atk": 4, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    }
+  ],
+  "battleFormat": "GEN_9_SINGLES"
+}

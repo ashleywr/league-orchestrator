@@ -1,0 +1,44 @@
+{
+  "name": "Gym Leader Erika",
+  "identity": "Kanto Grass-type Gym Leader",
+  "ai": {
+    "type": "rct",
+    "data": {
+      "maxSelectMargin": 0.15
+    }
+  },
+  "team": [
+    {
+      "species": "tangela",
+      "gender": "FEMALE",
+      "level": 14,
+      "nature": "calm",
+      "ability": "chlorophyll",
+      "moveset": ["vinewhip", "absorb", "sleeppowder", "growth"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 4, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "weepinbell",
+      "gender": "FEMALE",
+      "level": 14,
+      "nature": "modest",
+      "ability": "chlorophyll",
+      "moveset": ["razorleaf", "poisonpowder", "sleeppowder", "acid"],
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 0, "atk": 0, "def": 0, "spa": 4, "spd": 0, "spe": 0 }
+    },
+    {
+      "species": "vileplume",
+      "gender": "FEMALE",
+      "level": 15,
+      "nature": "modest",
+      "ability": "chlorophyll",
+      "moveset": ["razorleaf", "petaldance", "sleeppowder", "moonlight"],
+      "heldItem": "miracle_seed",
+      "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+      "evs": { "hp": 0, "atk": 0, "def": 0, "spa": 4, "spd": 0, "spe": 0 }
+    }
+  ],
+  "battleFormat": "GEN_9_SINGLES"
+}
