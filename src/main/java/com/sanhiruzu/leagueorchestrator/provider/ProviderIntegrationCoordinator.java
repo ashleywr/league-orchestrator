@@ -1,5 +1,6 @@
 package com.sanhiruzu.leagueorchestrator.provider;
 
+import com.sanhiruzu.leagueorchestrator.config.LeagueConfig;
 import com.sanhiruzu.leagueorchestrator.LeagueOrchestrator;
 import net.minecraft.server.MinecraftServer;
 
@@ -23,7 +24,6 @@ public final class ProviderIntegrationCoordinator {
     private static final long FAILURE_BACKOFF_TICKS = 200L;
     private static final long CIRCUIT_BREAK_TICKS = 1_200L;
     private static final int CIRCUIT_BREAK_FAILURES = 3;
-    private static final long SERVER_ACTION_BUDGET_NANOS = 5_000_000L;
 
     private static final Object LOCK = new Object();
     private static final PriorityQueue<ScheduledAction> SCHEDULED = new PriorityQueue<>(
@@ -107,7 +107,7 @@ public final class ProviderIntegrationCoordinator {
             return;
         }
         long elapsed = System.nanoTime() - startedAt;
-        if (elapsed > SERVER_ACTION_BUDGET_NANOS) {
+        if (elapsed > LeagueConfig.get().serverActionBudgetNanos) {
             LeagueOrchestrator.LOGGER.warn("League provider {} operation {} action {} used {} ms on the server thread.",
                     action.providerId(), action.operationId(), action.key(), elapsed / 1_000_000.0);
         }

@@ -1,5 +1,6 @@
 package com.sanhiruzu.leagueorchestrator.world;
 
+import com.sanhiruzu.leagueorchestrator.config.LeagueConfig;
 import com.sanhiruzu.leagueorchestrator.LeagueOrchestrator;
 import com.sanhiruzu.leagueorchestrator.data.GymArchetype;
 import com.sanhiruzu.leagueorchestrator.data.LeagueDataReloadListener;
@@ -21,7 +22,6 @@ import java.util.Set;
  * a chunk merely to place a leader.
  */
 public final class RctGymLeaderBridge {
-    private static final double ACTIVATION_DISTANCE = 192.0;
     private static volatile RctFacade facade;
 
     private RctGymLeaderBridge() {}
@@ -215,7 +215,8 @@ public final class RctGymLeaderBridge {
     }
 
     private static ServerPlayer nearestPlayer(ServerLevel level, BlockPos position) {
-        double maximumDistanceSquared = ACTIVATION_DISTANCE * ACTIVATION_DISTANCE;
+        double activationDistance = LeagueConfig.get().rctLeaderActivationDistance;
+        double maximumDistanceSquared = activationDistance * activationDistance;
         return level.players().stream()
                 .filter(player -> player.distanceToSqr(position.getCenter()) <= maximumDistanceSquared)
                 .min(java.util.Comparator.comparingDouble(player -> player.distanceToSqr(position.getCenter())))

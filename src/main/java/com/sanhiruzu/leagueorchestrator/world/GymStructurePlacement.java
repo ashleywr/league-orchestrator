@@ -1,5 +1,6 @@
 package com.sanhiruzu.leagueorchestrator.world;
 
+import com.sanhiruzu.leagueorchestrator.config.LeagueConfig;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.sanhiruzu.leagueorchestrator.LeagueOrchestrator;
 import com.sanhiruzu.leagueorchestrator.data.GymArchetype;
@@ -24,7 +25,6 @@ public final class GymStructurePlacement {
      * generic external gym structures a modest safety margin around that
      * documented maximum.
      */
-    private static final int EXTERNAL_STRUCTURE_LOAD_RADIUS = 128;
 
     private GymStructurePlacement() {}
 
@@ -40,7 +40,7 @@ public final class GymStructurePlacement {
             return VillageGymBuilder.place(level, position, front, gym);
         }
 
-        preloadPlacementArea(level, position, EXTERNAL_STRUCTURE_LOAD_RADIUS);
+        preloadPlacementArea(level, position, LeagueConfig.get().externalStructureLoadRadius);
 
         CommandSourceStack source = level.getServer().createCommandSourceStack()
                 .withLevel(level)

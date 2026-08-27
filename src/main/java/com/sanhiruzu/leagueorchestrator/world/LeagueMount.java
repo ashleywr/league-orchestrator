@@ -1,5 +1,6 @@
 package com.sanhiruzu.leagueorchestrator.world;
 
+import com.sanhiruzu.leagueorchestrator.config.LeagueConfig;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -13,10 +14,10 @@ import net.minecraft.server.level.ServerLevel;
  * hub. Every League subsystem that needs "the League world" asks here rather
  * than assuming {@code server.overworld()}, so that choice stays in one place.
  *
- * <p>The mount currently resolves to the overworld unconditionally. This class
- * exists so the resolution has a single owner before it becomes configurable;
- * introducing it later would mean revisiting every call site with worlds
- * already in the wild.
+ * <p>The mount point is server policy, read from LeagueConfig. Only
+ * {@code main_world} is implemented, so this still resolves to the overworld;
+ * an unimplemented value is refused during config validation rather than
+ * silently changing where a campaign generates.
  *
  * <p>Note that {@link WorldLeaguePlan} is per-level {@link
  * net.minecraft.world.level.saveddata.SavedData}, so a plan follows its mounted
@@ -28,6 +29,10 @@ public final class LeagueMount {
 
     /** The level League generates and plans into. */
     public static ServerLevel level(MinecraftServer server) {
+        // Config validation reduces mount to one League can honour, and
+        // main_world is the only one implemented. When a League dimension
+        // exists, this is where it is chosen.
+        assert LeagueConfig.MOUNT_MAIN_WORLD.equals(LeagueConfig.get().mount);
         return server.overworld();
     }
 

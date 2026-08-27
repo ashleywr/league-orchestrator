@@ -1,5 +1,6 @@
 package com.sanhiruzu.leagueorchestrator.world;
 
+import com.sanhiruzu.leagueorchestrator.config.LeagueConfig;
 import com.sanhiruzu.leagueorchestrator.LeagueOrchestrator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
@@ -24,8 +25,6 @@ import java.util.Set;
  */
 public final class StarterTownBootstrap {
     private static final int APRON_DISTANCE = 32;
-    private static final int MAX_STARTUP_CANDIDATES = 3;
-    private static final int MAX_STARTUP_ROUTE_CANDIDATES = 12;
     private static final long REQUEST_TIMEOUT_TICKS = 400L;
     private static final Queue<Request> PENDING = new ArrayDeque<>();
     private static final Set<String> QUEUED = new HashSet<>();
@@ -59,7 +58,7 @@ public final class StarterTownBootstrap {
      */
     public static void materializeBeforeFirstJoin(ServerLevel level) {
         WorldLeaguePlan plan = WorldLeaguePlan.get(level);
-        for (int attempt = 0; attempt < MAX_STARTUP_CANDIDATES; attempt++) {
+        for (int attempt = 0; attempt < LeagueConfig.get().maxStartupTownCandidates; attempt++) {
             TownAnchor town = plan.reserveNearestStarterTown(level).orElse(null);
             if (town == null) return;
             if (town.bounds() == null) town = TownStartPrewarmer.materializeBootstrapTownNow(level, town);
@@ -87,7 +86,7 @@ public final class StarterTownBootstrap {
     private static void materializeInitialRouteAnchor(ServerLevel level, TownAnchor starter) {
         WorldLeaguePlan plan = WorldLeaguePlan.get(level);
         Set<String> attempted = new HashSet<>();
-        for (int attempt = 0; attempt < MAX_STARTUP_ROUTE_CANDIDATES; attempt++) {
+        for (int attempt = 0; attempt < LeagueConfig.get().maxStartupRouteCandidates; attempt++) {
             TownAnchor candidate = plan.unrealizedTowns().stream()
                     .filter(town -> town.siteX() == starter.siteX() && town.siteZ() == starter.siteZ())
                     .filter(town -> !town.id().equals(starter.id()))

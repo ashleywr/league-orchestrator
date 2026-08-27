@@ -47,6 +47,25 @@ allow/deny species pools. It does not yet implement route-level spawn
 replacement, level scaling, rewards, legendary triggers, or generic town
 building placement.
 
+## Server configuration
+
+`config/league-orchestrator.json` is written on first start. It holds server
+policy - how a campaign is run - and never campaign content. Values are read
+once at startup and clamped to safe ranges on load.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `mount` | `main_world` | Where League content generates. `instanced_dimension` is reserved for a separate League dimension and is refused with a warning until it is implemented. |
+| `serverActionBudgetNanos` | `5000000` | Per-tick budget for optional RoadWeaver/RCT work. Exceeding it logs a slow-action warning; it never cancels work in flight. |
+| `maxStartupTownCandidates` | `3` | Predicted towns a new world will try before leaving the shared spawn where vanilla put it. Each attempt loads chunks. |
+| `maxStartupRouteCandidates` | `12` | Predicted towns considered for the first RoadWeaver endpoint. |
+| `externalStructureLoadRadius` | `128` | Blocks force-loaded around an external gym structure before placement. |
+| `rctLeaderActivationDistance` | `192.0` | How close a player must be before a saved RCT leader is reconciled. Never forces chunk loading. |
+
+Gym allocation ratios, town tiering, and encounter bands are deliberately absent.
+Those are campaign design: a server tuning them would silently unbalance a pack
+its author tested. They belong to content packs.
+
 ## RoadWeaver's role
 
 League is authoritative for *which* places connect. RoadWeaver is an optional

@@ -1,6 +1,7 @@
 package com.sanhiruzu.leagueorchestrator;
 
 import com.cobblemon.mod.common.api.events.CobblemonEvents;
+import com.sanhiruzu.leagueorchestrator.config.LeagueConfig;
 import com.sanhiruzu.leagueorchestrator.data.LeagueDataReloadListener;
 import com.sanhiruzu.leagueorchestrator.spawn.RegionalSpawnFilter;
 import com.sanhiruzu.leagueorchestrator.world.LeagueCommands;
@@ -37,6 +38,7 @@ public final class LeagueOrchestrator implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        LeagueConfig.load();
         LeagueWorldgen.bootstrap();
         RoadWeaverPlacementAdapterBridge.install();
         if (FabricLoader.getInstance().isModLoaded("cobblemon-additions")) {
