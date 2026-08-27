@@ -8,7 +8,7 @@
   "license": "${mod_license}",
   "environment": "*",
   "entrypoints": {
-    "main": ["dev.leagueorchestrator.LeagueOrchestrator"]
+    "main": ["com.sanhiruzu.leagueorchestrator.LeagueOrchestrator"]
   },
   "depends": {
     "fabricloader": ">=${fabric_loader_version}",
