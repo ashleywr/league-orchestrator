@@ -3,6 +3,7 @@
   "mode": "procedural",
   "seed_salt": "frontier-v1",
   "gym_pool": "",
+  "town_names": ["Alder", "Ashgrove", "Brindle", "Cedarfall", "Clearwater", "Dunewatch", "Elmrest", "Fernhollow", "Goldmere", "Hearthstead", "Ironwood", "Juniper", "Larkspur", "Mossfield", "Northwind", "Oakheart", "Pinecross", "Quartz Bay", "Rosewood", "Silverbrook", "Stonebridge", "Sunreach", "Thornvale", "Umber", "Verdant", "Willowmere"],
   "fallback": true,
   "priority": -1000,
   "town_palettes": [],
