@@ -65,10 +65,17 @@ once at startup and clamped to safe ranges on load.
 
 Chosen once, on the **World Type** button when creating the world:
 
-| World type | Result |
-|---|---|
-| `Normal` (or any vanilla type) | The campaign generates in the overworld. Solo and small co-op shape. |
-| `League Dimension` | The campaign generates in `league_orchestrator:league`. The overworld stays a plain persistent world, which is the shape a server wants for a social hub. |
+| World type | Overworld | Campaign |
+|---|---|---|
+| `Normal` | Vanilla terrain | In the overworld, on vanilla geography |
+| `Atlas World` | Atlas continents | In the overworld. Solo and small co-op shape |
+| `League Dimension` | **Vanilla terrain** | In `league_orchestrator:league`, an Atlas continent of its own |
+
+`Atlas World` comes from Region Engine; `League Dimension` from League and uses
+`region_engine:atlas` for its own dimension only. That last row is the point of
+the whole arrangement: the hub keeps ordinary overworld generation, including
+whatever other worldgen mods and configs already do to it, while the campaign
+gets a continent shaped for it.
 
 That is the whole decision. There is no `mount` setting, because the world
 itself is the source of truth: League mounts wherever the League dimension

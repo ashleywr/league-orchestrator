@@ -4,7 +4,10 @@
       "type": "minecraft:overworld",
       "generator": {
         "type": "minecraft:noise",
-        "biome_source": { "type": "minecraft:multi_noise", "preset": "minecraft:overworld" },
+        "biome_source": {
+          "type": "minecraft:multi_noise",
+          "preset": "minecraft:overworld"
+        },
         "settings": "minecraft:overworld"
       }
     },
@@ -12,7 +15,10 @@
       "type": "minecraft:the_nether",
       "generator": {
         "type": "minecraft:noise",
-        "biome_source": { "type": "minecraft:multi_noise", "preset": "minecraft:nether" },
+        "biome_source": {
+          "type": "minecraft:multi_noise",
+          "preset": "minecraft:nether"
+        },
         "settings": "minecraft:nether"
       }
     },
@@ -20,7 +26,9 @@
       "type": "minecraft:the_end",
       "generator": {
         "type": "minecraft:noise",
-        "biome_source": { "type": "minecraft:the_end" },
+        "biome_source": {
+          "type": "minecraft:the_end"
+        },
         "settings": "minecraft:end"
       }
     },
@@ -28,8 +36,11 @@
       "type": "minecraft:overworld",
       "generator": {
         "type": "minecraft:noise",
-        "biome_source": { "type": "minecraft:multi_noise", "preset": "minecraft:overworld" },
-        "settings": "minecraft:overworld"
+        "biome_source": {
+          "type": "minecraft:multi_noise",
+          "preset": "minecraft:overworld"
+        },
+        "settings": "region_engine:atlas"
       }
     }
   }
