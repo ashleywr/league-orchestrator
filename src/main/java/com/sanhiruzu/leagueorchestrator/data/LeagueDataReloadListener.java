@@ -116,6 +116,7 @@ public final class LeagueDataReloadListener implements SimpleSynchronousResource
             JsonObject root = GSON.fromJson(reader, JsonObject.class);
             ResourceLocation id = id(root, "id", definitionId(fileId, "league_orchestrator/campaigns/"));
             Set<String> requirements = strings(root.getAsJsonArray("requires"));
+            Set<String> recommendations = strings(root.getAsJsonArray("recommends"));
             campaigns.put(id, new CampaignDefinition(
                     id,
                     CampaignMode.parse(optionalString(root, "mode", "fixed")),
@@ -132,7 +133,8 @@ public final class LeagueDataReloadListener implements SimpleSynchronousResource
                     resourceLocations(root.getAsJsonArray("legendary_encounters")),
                     resourceLocations(root.getAsJsonArray("trainers")),
                     resourceLocations(root.getAsJsonArray("rewards")),
-                    requirements
+                    requirements,
+                    recommendations
             ));
         } catch (Exception exception) {
             throw new IllegalArgumentException("Invalid League campaign " + fileId, exception);
@@ -233,6 +235,15 @@ public final class LeagueDataReloadListener implements SimpleSynchronousResource
                                             Map<ResourceLocation, TrainerDefinition> trainers,
                                             Map<ResourceLocation, RewardDefinition> rewards) {
         Set<String> missingProviders = new HashSet<>(ProviderRegistry.missing(campaign.requiredProviders()));
+        // Recommendations never affect availability. They exist so an operator
+        // finds out a campaign is running in a reduced form on purpose, rather
+        // than wondering later why a feature never appeared.
+        Set<String> missingRecommended = ProviderRegistry.missing(campaign.recommendedProviders());
+        if (!missingRecommended.isEmpty()) {
+            LeagueOrchestrator.LOGGER.info("Campaign {} recommends {}, which {} not installed. "
+                            + "The campaign still runs; features needing them will not appear.",
+                    id, missingRecommended, missingRecommended.size() == 1 ? "is" : "are");
+        }
         boolean validRctSeries = true;
         if (!campaign.fallback()) {
             if (campaign.rctSeriesId().isBlank()) {

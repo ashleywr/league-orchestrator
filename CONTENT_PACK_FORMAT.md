@@ -332,3 +332,33 @@ CobbleFurnies, Mega Showdown, CobbleDollars, and SimpleTMs are registered as
 known provider capabilities, but their actual content adapters are not yet
 implemented. A pack should only list a provider in `requires` once it uses
 that provider's implemented feature.
+
+## Declaring dependencies
+
+A campaign states what it needs and what it merely likes, as mod ids.
+
+```json
+{
+  "id": "league_orchestrator:kanto_classic",
+  "requires":   ["cobblemon-additions"],
+  "recommends": ["roadweaver", "cobbledollars", "simpletms"]
+}
+```
+
+| Key | Meaning | Effect when missing |
+|---|---|---|
+| `requires` | The campaign cannot function without it. Kanto references `bca:` structures, so without Better Cobblemon Adventures its towns do not exist. | The campaign becomes **unavailable** and League falls back to `frontier`. |
+| `recommends` | The campaign is better with it but runs correctly without. RoadWeaver renders roads between towns; without it towns simply stand unconnected. | Reported once at load. Nothing else changes. |
+
+A missing requirement never stops the server. Refusing to boot would punish an
+operator for a content pack's expectations, and League already has a fallback
+campaign for exactly this. The campaign is dropped, the reason is logged, and
+the world still loads.
+
+Both lists accept any mod id, not only the providers League knows about, so a
+pack can depend on content mods League has never heard of.
+
+Requirements are declared per definition, not only per campaign: town palettes,
+route profiles, encounter profiles, legendary encounters, trainers, and rewards
+each carry their own `requires`, so one missing mod removes only the parts that
+actually needed it.

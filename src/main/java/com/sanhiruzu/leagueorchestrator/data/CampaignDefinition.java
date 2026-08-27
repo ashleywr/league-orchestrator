@@ -25,5 +25,13 @@ public record CampaignDefinition(
         List<ResourceLocation> legendaryEncounters,
         List<ResourceLocation> trainers,
         List<ResourceLocation> rewards,
-        Set<String> requiredProviders
+        /** Mods this campaign cannot run without. Missing ones make it unavailable. */
+        Set<String> requiredProviders,
+        /**
+         * Mods that make this campaign better but are not needed for it to run.
+         * Missing ones are reported once at load and change nothing else - the
+         * campaign still resolves, and every feature that does not depend on
+         * them still works.
+         */
+        Set<String> recommendedProviders
 ) {}

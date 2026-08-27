@@ -4,9 +4,30 @@
   "seed_salt": "kanto-classic-v1",
   "gym_pool": "kanto_badges",
   "rct_series": "league_orchestrator_kanto",
-  "town_names": ["Pallet Town", "Viridian City", "Pewter City", "Cerulean City", "Vermilion City", "Lavender Town", "Celadon City", "Fuchsia City", "Saffron City", "Cinnabar Island", "Indigo Plateau"],
-  "requires": ["cobblemon-additions"],
-  "region_profiles": ["region_engine:kanto"],
+  "town_names": [
+    "Pallet Town",
+    "Viridian City",
+    "Pewter City",
+    "Cerulean City",
+    "Vermilion City",
+    "Lavender Town",
+    "Celadon City",
+    "Fuchsia City",
+    "Saffron City",
+    "Cinnabar Island",
+    "Indigo Plateau"
+  ],
+  "requires": [
+    "cobblemon-additions"
+  ],
+  "recommends": [
+    "roadweaver",
+    "cobbledollars",
+    "simpletms"
+  ],
+  "region_profiles": [
+    "region_engine:kanto"
+  ],
   "town_palettes": [],
   "route_profiles": [],
   "encounter_profiles": [],
