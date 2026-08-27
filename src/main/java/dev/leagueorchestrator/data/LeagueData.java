@@ -49,14 +49,19 @@ public record LeagueData(
 
     /** Exact region declarations win; the procedural fallback covers every other profile. */
     public Optional<CampaignDefinition> campaignForProfile(ResourceLocation profileId) {
-        return campaigns.values().stream()
-                .filter(campaign -> campaign.regionProfiles().contains(profileId))
-                .sorted(campaignOrder())
-                .findFirst()
+        return exactCampaignForProfile(profileId)
                 .or(() -> campaigns.values().stream()
                         .filter(CampaignDefinition::fallback)
                         .sorted(campaignOrder())
                         .findFirst());
+    }
+
+    /** Returns only a content pack that explicitly claims this profile. */
+    public Optional<CampaignDefinition> exactCampaignForProfile(ResourceLocation profileId) {
+        return campaigns.values().stream()
+                .filter(campaign -> campaign.regionProfiles().contains(profileId))
+                .sorted(campaignOrder())
+                .findFirst();
     }
 
     private static Comparator<CampaignDefinition> campaignOrder() {

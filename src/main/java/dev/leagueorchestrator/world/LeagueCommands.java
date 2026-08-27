@@ -8,6 +8,7 @@ import dev.leagueorchestrator.data.LeagueDataReloadListener;
 import dev.leagueorchestrator.provider.ProviderRegistry;
 import dev.leagueorchestrator.provider.ProviderIntegrationCoordinator;
 import dev.regionengine.policy.RegionPolicyService;
+import dev.regionengine.place.RegionPlaceService;
 import dev.regionengine.world.atlas.AtlasRegion;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -30,6 +31,8 @@ public final class LeagueCommands {
                 .then(Commands.literal("info").executes(LeagueCommands::info))
                 .then(Commands.literal("integration")
                         .then(Commands.literal("status").executes(LeagueCommands::integrationStatus)))
+                .then(Commands.literal("trainers")
+                        .then(Commands.literal("reload").executes(LeagueCommands::reloadTrainers)))
                 .then(Commands.literal("site").executes(LeagueCommands::site))
                 .then(Commands.literal("claim")
                         .then(Commands.argument("pool", StringArgumentType.word())
@@ -74,9 +77,12 @@ public final class LeagueCommands {
         ServerPlayer player = context.getSource().getPlayerOrException();
         AtlasRegion atlas = RegionPolicyService.atlasRegionAt(player.serverLevel().getSeed(), player.getX(), player.getZ());
         String profile = RegionPolicyService.profileAt(player.serverLevel(), player.getX(), player.getZ()).id().toString();
+        String place = RegionPlaceService.activePlaceAt(player.serverLevel(), player.getX(), player.getZ())
+                .map(value -> " in " + value.name() + " [" + value.id() + "]")
+                .orElse("");
         context.getSource().sendSuccess(() -> Component.literal(
                 "Atlas " + atlas.kind().name().toLowerCase() + " site " + atlas.cellX() + "," + atlas.cellZ()
-                        + " uses profile " + profile + "."), false);
+                        + " uses profile " + profile + place + "."), false);
         return 1;
     }
 
@@ -87,6 +93,19 @@ public final class LeagueCommands {
                 + status.rejectedCapacity() + " capacity deferrals; " + status.completed() + " completed; "
                 + status.degraded() + " degraded."), false);
         return 1;
+    }
+
+    /**
+     * Picks up trainer progression files written into this world's own
+     * datapacks since the last load (e.g. by scripts/generate_gym_progression.py)
+     * without a full server restart. See RctGymLeaderBridge#reloadTrainerData.
+     */
+    private static int reloadTrainers(CommandContext<CommandSourceStack> context) {
+        boolean reloaded = RctGymLeaderBridge.reloadTrainerData(context.getSource().getServer());
+        context.getSource().sendSuccess(() -> Component.literal(reloaded
+                ? "Reloaded RCT trainer data."
+                : "Could not reload RCT trainer data; check the server log."), true);
+        return reloaded ? 1 : 0;
     }
 
     private static int claim(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
@@ -117,7 +136,7 @@ public final class LeagueCommands {
         Optional<TownAnchor> town = WorldLeaguePlan.get(player.serverLevel())
                 .nearestTown(player.serverLevel(), player.blockPosition(), 384.0);
         context.getSource().sendSuccess(() -> Component.literal(town
-                .map(value -> "Nearest town: '" + value.id() + "' at " + value.center().toShortString()
+                .map(value -> "Nearest town: '" + value.name() + "' (" + value.id() + ") at " + value.center().toShortString()
                         + (value.bounds() == null ? " (planned or manual anchor)." : " (realized settlement zone)."))
                 .orElse("No League town is registered within 384 blocks in this atlas site.")), false);
         return town.isPresent() ? 1 : 0;

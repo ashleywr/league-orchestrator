@@ -46,6 +46,31 @@ public final class RctGymLeaderBridge {
         ProviderIntegrationCoordinator.tick(server);
     }
 
+    /**
+     * Re-reads every RCT trainer resource, including any progression file a
+     * generator wrote into this world's own datapacks since the last load.
+     * RCT reconciles already-spawned leaders against the refreshed data
+     * itself; League does not need to re-anchor anything afterward. Callers
+     * must already be on the server thread (e.g. a command execution).
+     */
+    public static boolean reloadTrainerData(MinecraftServer server) {
+        if (!server.isSameThread()) {
+            throw new IllegalStateException("reloadTrainerData must run on the server thread");
+        }
+        if (!FabricLoader.getInstance().isModLoaded("rctmod")) {
+            LeagueOrchestrator.LOGGER.warn("Cannot reload RCT trainer data: rctmod is not installed.");
+            return false;
+        }
+        try {
+            facade().reloadTrainers();
+            LeagueOrchestrator.LOGGER.info("Reloaded RCT trainer data.");
+            return true;
+        } catch (ReflectiveOperationException exception) {
+            LeagueOrchestrator.LOGGER.warn("Could not reload RCT trainer data.", exception);
+            return false;
+        }
+    }
+
     public static void stop() {
         facade = null;
         ProviderIntegrationCoordinator.stop();
@@ -75,7 +100,7 @@ public final class RctGymLeaderBridge {
 
         @Override
         public ProviderIntegrationCoordinator.ActionResult execute(MinecraftServer server) throws Exception {
-            ServerLevel level = server.overworld();
+            ServerLevel level = LeagueMount.level(server);
             if (!level.dimension().location().equals(intent.dimension())) return ProviderIntegrationCoordinator.ActionResult.DROP;
 
             GymArchetype gym = LeagueDataReloadListener.current().gymArchetypes().get(intent.gymId());
@@ -165,7 +190,7 @@ public final class RctGymLeaderBridge {
 
         @Override
         public void onFailure(MinecraftServer server, Throwable throwable) {
-            ServerLevel level = server.overworld();
+            ServerLevel level = LeagueMount.level(server);
             if (!level.dimension().location().equals(intent.dimension())) return;
             WorldLeaguePlan plan = WorldLeaguePlan.get(level);
             plan.townAt(level, intent.townCenter(), intent.townId())
@@ -212,10 +237,11 @@ public final class RctGymLeaderBridge {
         private final Method trainerId;
         private final Method homePos;
         private final Method persistent;
+        private final Method loadTrainers;
 
         private RctFacade(Object rct, Method trainerManager, Method seriesManager, Method trainerSpawner, Method seriesIds,
                           Method validTrainer, Method trainerData, Method trainerInSeries, Method spawn, Method spawns,
-                          Method trainerId, Method homePos, Method persistent) {
+                          Method trainerId, Method homePos, Method persistent, Method loadTrainers) {
             this.rct = rct;
             this.trainerManager = trainerManager;
             this.seriesManager = seriesManager;
@@ -229,6 +255,7 @@ public final class RctGymLeaderBridge {
             this.trainerId = trainerId;
             this.homePos = homePos;
             this.persistent = persistent;
+            this.loadTrainers = loadTrainers;
         }
 
         static RctFacade resolve() throws ReflectiveOperationException {
@@ -245,7 +272,11 @@ public final class RctGymLeaderBridge {
                     spawner.getClass().getMethod("attemptSpawnFor", ServerPlayer.class, String.class, BlockPos.class,
                             boolean.class, boolean.class, boolean.class, double.class, double.class),
                     spawner.getClass().getMethod("getSpawns"), trainerMob.getMethod("getTrainerId"), trainerMob.getMethod("getHomePos"),
-                    trainerMob.getMethod("setPersistent", boolean.class));
+                    trainerMob.getMethod("setPersistent", boolean.class), trainerManager.getClass().getMethod("loadTrainers"));
+        }
+
+        void reloadTrainers() throws ReflectiveOperationException {
+            loadTrainers.invoke(trainerManager.invoke(rct));
         }
 
         @SuppressWarnings("unchecked")

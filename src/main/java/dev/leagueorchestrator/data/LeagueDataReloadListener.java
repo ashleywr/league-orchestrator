@@ -122,6 +122,7 @@ public final class LeagueDataReloadListener implements SimpleSynchronousResource
                     optionalString(root, "seed_salt", id.toString()),
                     optionalString(root, "gym_pool"),
                     optionalString(root, "rct_series"),
+                    strings(root.getAsJsonArray("town_names")).stream().sorted().toList(),
                     resourceLocationSet(root.getAsJsonArray("region_profiles")),
                     root.has("fallback") && root.get("fallback").getAsBoolean(),
                     Math.clamp(root.has("priority") ? root.get("priority").getAsInt() : 0, -1000, 1000),

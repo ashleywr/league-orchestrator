@@ -11,31 +11,47 @@ import java.util.UUID;
  */
 public record TownAnchor(String id, int siteX, int siteZ, BlockPos center, BoundingBox bounds, BlockPos gymPosition,
                          BlockPos roadEndpoint, BlockPos gymLeaderPosition, UUID gymLeaderUuid,
-                         GymLeaderState gymLeaderState, String gymLeaderFailure) {
+                         GymLeaderState gymLeaderState, String gymLeaderFailure, String name) {
     public TownAnchor withGymPosition(BlockPos position, BlockPos leaderPosition, boolean leaderRequested) {
         GymLeaderState state = leaderPosition == null || !leaderRequested ? GymLeaderState.UNASSIGNED : GymLeaderState.PENDING;
-        return new TownAnchor(id, siteX, siteZ, center, bounds, position, roadEndpoint, leaderPosition, null, state, "");
+        return new TownAnchor(id, siteX, siteZ, center, bounds, position, roadEndpoint, leaderPosition, null, state, "", name);
     }
 
     public TownAnchor withRealizedBounds(BlockPos realizedCenter, BoundingBox realizedBounds) {
         return new TownAnchor(id, siteX, siteZ, realizedCenter, realizedBounds, gymPosition, roadEndpoint,
-                gymLeaderPosition, gymLeaderUuid, gymLeaderState, gymLeaderFailure);
+                gymLeaderPosition, gymLeaderUuid, gymLeaderState, gymLeaderFailure, name);
+    }
+
+    /** Keeps the town identity and generated bounds while moving its road-facing port. */
+    public TownAnchor withRoadEndpoint(BlockPos endpoint) {
+        return new TownAnchor(id, siteX, siteZ, center, bounds, gymPosition, endpoint,
+                gymLeaderPosition, gymLeaderUuid, gymLeaderState, gymLeaderFailure, name);
     }
 
     public TownAnchor withGymLeaderUuid(UUID leaderUuid) {
         return new TownAnchor(id, siteX, siteZ, center, bounds, gymPosition, roadEndpoint, gymLeaderPosition,
-                leaderUuid, GymLeaderState.ACTIVE, "");
+                leaderUuid, GymLeaderState.ACTIVE, "", name);
     }
 
     public TownAnchor withGymLeaderState(GymLeaderState state, String failure) {
         UUID uuid = state == GymLeaderState.ACTIVE ? gymLeaderUuid : null;
         return new TownAnchor(id, siteX, siteZ, center, bounds, gymPosition, roadEndpoint, gymLeaderPosition,
-                uuid, state, failure == null ? "" : failure);
+                uuid, state, failure == null ? "" : failure, name);
+    }
+
+    public TownAnchor withName(String displayName) {
+        return new TownAnchor(id, siteX, siteZ, center, bounds, gymPosition, roadEndpoint, gymLeaderPosition,
+                gymLeaderUuid, gymLeaderState, gymLeaderFailure, displayName == null ? "" : displayName);
     }
 
     /** The immutable, pre-generation endpoint used by the campaign road graph. */
     public BlockPos routeEndpoint() {
         return roadEndpoint == null ? center : roadEndpoint;
+    }
+
+    /** Stable semantic scale inferred from the selected content-pack structure. */
+    public TownTier tier() {
+        return TownTier.fromSettlementId(id);
     }
 
     public boolean contains(BlockPos position) {
@@ -48,6 +64,7 @@ public record TownAnchor(String id, int siteX, int siteZ, BlockPos center, Bound
     public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", id);
+        if (!name.isBlank()) tag.putString("name", name);
         tag.putInt("site_x", siteX);
         tag.putInt("site_z", siteZ);
         tag.putLong("center", center.asLong());
@@ -91,7 +108,8 @@ public record TownAnchor(String id, int siteX, int siteZ, BlockPos center, Bound
                 leaderPosition,
                 leaderUuid,
                 GymLeaderState.fromSaved(tag.getString("gym_leader_state"), leaderPosition != null, leaderUuid != null),
-                tag.getString("gym_leader_failure")
+                tag.getString("gym_leader_failure"),
+                tag.getString("name")
         );
     }
 }

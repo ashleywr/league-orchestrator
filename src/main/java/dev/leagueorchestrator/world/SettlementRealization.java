@@ -17,9 +17,22 @@ public final class SettlementRealization {
     private SettlementRealization() {}
 
     public static void realize(ServerLevel level, LevelChunk chunk) {
-        if (level != level.getServer().overworld()) return;
+        if (!LeagueMount.isMounted(level)) return;
         Registry<Structure> structures = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        boolean hasSettlementStart = chunk.getAllStarts().entrySet().stream()
+                .anyMatch(entry -> isSettlementStart(structures, entry.getKey(), entry.getValue()));
         chunk.getAllStarts().forEach((structure, start) -> realizeStart(level, structures, structure, start));
+        if (!hasSettlementStart) {
+            WorldLeaguePlan.get(level).pendingTownStartsInChunk(chunk.getPos().x, chunk.getPos().z).forEach(town -> {
+                if (RoadsideStopFallback.create(level, town)) StarterTownBootstrap.onTownRejected(level, town);
+            });
+        }
+    }
+
+    private static boolean isSettlementStart(Registry<Structure> structures, Structure structure, StructureStart start) {
+        if (!start.isValid()) return false;
+        ResourceLocation id = structures.getKey(structure);
+        return id != null && structures.getHolder(id).map(holder -> holder.is(SettlementPredictor.SETTLEMENTS)).orElse(false);
     }
 
     private static void realizeStart(ServerLevel level, Registry<Structure> structures, Structure structure, StructureStart start) {
@@ -27,6 +40,9 @@ public final class SettlementRealization {
         ResourceLocation id = structures.getKey(structure);
         if (id == null || !structures.getHolder(id).map(holder -> holder.is(SettlementPredictor.SETTLEMENTS)).orElse(false)) return;
         WorldLeaguePlan.get(level).realizeSettlement(level, id, start.getChunkPos(), start.getBoundingBox())
-                .ifPresent(town -> AutoTownGymPlacement.enqueue(level, town));
+                .ifPresent(town -> {
+                    StarterTownBootstrap.onTownRealized(level, town);
+                    AutoTownGymPlacement.enqueue(level, town);
+                });
     }
 }

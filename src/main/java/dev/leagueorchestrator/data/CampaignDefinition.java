@@ -15,6 +15,7 @@ public record CampaignDefinition(
         String seedSalt,
         String gymPool,
         String rctSeriesId,
+        List<String> townNames,
         Set<ResourceLocation> regionProfiles,
         boolean fallback,
         int priority,

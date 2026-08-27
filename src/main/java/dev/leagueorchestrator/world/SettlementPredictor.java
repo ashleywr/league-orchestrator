@@ -6,7 +6,6 @@ import dev.regionengine.world.atlas.AtlasRegion;
 import dev.regionengine.policy.RegionPolicyService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
-import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -14,11 +13,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
-import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.LegacyRandomSource;
+import net.minecraft.world.level.levelgen.WorldgenRandom;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.placement.ConcentricRingsStructurePlacement;
@@ -52,19 +50,39 @@ public final class SettlementPredictor {
         return thread;
     });
     private static final Set<String> PENDING_SITES = new HashSet<>();
-
     private SettlementPredictor() {}
 
     /** Plans the full atlas site containing spawn before any exploration is needed. */
     public static void planSpawnSite(MinecraftServer server) {
-        ServerLevel level = server.overworld();
+        ServerLevel level = LeagueMount.level(server);
+        if (RoadWeaverPlacementAdapterBridge.isInstalled()) {
+            // RoadWeaver calls the integration after its own initial regional
+            // pass. Do not race it with a second structure-set scan here.
+            return;
+        }
         AtlasRegion site = RegionPolicyService.atlasRegionAt(level.getSeed(), level.getSharedSpawnPos().getX(), level.getSharedSpawnPos().getZ());
-        if (site.kind() == AtlasRegion.Kind.CONTINENT) requestSite(level, site.cellX(), site.cellZ());
+        if (site.kind() != AtlasRegion.Kind.CONTINENT) return;
+
+        WorldLeaguePlan plan = WorldLeaguePlan.get(level);
+        if (!plan.isSitePlanned(site.cellX(), site.cellZ())) {
+            // This is the one bounded start-up exception to background
+            // prediction. It performs only pure placement math, before an
+            // integrated/dedicated server accepts its first player, so the
+            // starter town can establish the actual shared spawn in time.
+            Snapshot snapshot = Snapshot.capture(level, site.cellX(), site.cellZ());
+            try {
+                applyPrediction(level, snapshot, predict(snapshot), null);
+            } catch (Throwable throwable) {
+                LeagueOrchestrator.LOGGER.warn("Could not synchronously predict the initial starter site {},{}.",
+                        site.cellX(), site.cellZ(), throwable);
+            }
+        }
+        StarterTownBootstrap.materializeBeforeFirstJoin(level);
     }
 
     /** Plans a site once, without generating any of its chunks. Safe to call every player tick. */
     public static void requestSite(ServerLevel level, int siteX, int siteZ) {
-        if (level != level.getServer().overworld()) return;
+        if (!LeagueMount.isMounted(level)) return;
         WorldLeaguePlan plan = WorldLeaguePlan.get(level);
         String key = siteKey(siteX, siteZ);
         synchronized (PENDING_SITES) {
@@ -78,7 +96,8 @@ public final class SettlementPredictor {
 
     /** Expands the plan as players enter new atlas sites; this is not a chunk or structure event. */
     public static void planPlayerSites(MinecraftServer server) {
-        ServerLevel level = server.overworld();
+        if (RoadWeaverPlacementAdapterBridge.isInstalled()) return;
+        ServerLevel level = LeagueMount.level(server);
         server.getPlayerList().getPlayers().forEach(player -> {
             if (player.serverLevel() != level) return;
             AtlasRegion site = RegionPolicyService.atlasRegionAt(level.getSeed(), player.getX(), player.getZ());
@@ -111,18 +130,18 @@ public final class SettlementPredictor {
             Optional<TownAnchor> anchor = plan.planSettlement(level, settlement.structureId(), settlement.position());
             if (anchor.isPresent()) {
                 planned++;
-                // Reserve every site-local gym before terrain generation. The
-                // later realization pass only supplies a safe physical lot.
-                if (AutoTownGymPlacement.isGymEligible(level, anchor.get())) {
-                    plan.campaignFor(level, anchor.get().center()).map(dev.leagueorchestrator.data.CampaignDefinition::gymPool)
-                            .filter(pool -> !pool.isBlank())
-                            .ifPresent(pool -> plan.gymForTown(level, anchor.get(), pool));
-                }
+                TownStartPrewarmer.enqueue(level, anchor.get());
             }
         }
-        plan.ensureSiteRoadGraph(snapshot.siteX(), snapshot.siteZ());
+        // Priority is a scheduling decision only. The selected town still
+        // enters through the same Minecraft structure-placement pipeline.
+        StarterTownBootstrap.considerPlannedTowns(level);
+        // BCA jigsaws can still reject a terrain-dependent candidate. Keep
+        // the candidate solely as a persistent town identity; its road node,
+        // gym, and route edges are created only by SettlementRealization.
+        // RoadWeaver treats every endpoint as a protected structure location,
+        // so publishing an ungenerated candidate would create a phantom town.
         plan.markSitePlanned(snapshot.siteX(), snapshot.siteZ());
-        plan.publishRoadWeaverCampaign(level);
         // Spawn chunks may have loaded before the asynchronous prediction
         // finishes. Reconcile only chunks already resident in memory; never
         // request a chunk from this planning path.
@@ -143,6 +162,12 @@ public final class SettlementPredictor {
                 List<ChunkPos> positions = snapshot.structureState().getRingPositionsFor(rings);
                 if (positions == null) continue;
                 for (ChunkPos chunk : positions) addCandidate(snapshot, set, placement, chunk, predicted);
+                continue;
+            }
+            if (placement instanceof LeagueTownStructurePlacement leagueTown) {
+                leagueTown.potentialChunks(snapshot.seed(), snapshot.minChunkX(), snapshot.minChunkZ(),
+                                snapshot.maxChunkX(), snapshot.maxChunkZ())
+                        .forEach(candidate -> addCandidate(snapshot, set, placement, candidate, predicted));
                 continue;
             }
             if (!(placement instanceof RandomSpreadStructurePlacement randomSpread)) continue;
@@ -168,15 +193,11 @@ public final class SettlementPredictor {
                 || candidate.z < snapshot.minChunkZ() || candidate.z > snapshot.maxChunkZ()) return;
         if (!placement.isStructureChunk(snapshot.structureState(), candidate.x, candidate.z)) return;
 
-        BlockPos position = placement.getLocatePos(candidate);
-        Holder<Biome> biome = snapshot.biomeSource().getNoiseBiome(
-                QuartPos.fromBlock(position.getX()), QuartPos.fromBlock(64), QuartPos.fromBlock(position.getZ()),
-                snapshot.randomState().sampler());
-        CandidateStructure structure = set.structureFor(biome);
-        if (structure == null) return;
+        CandidateStructure structure = set.structureFor(snapshot.seed(), candidate);
+        if (structure == null || !structure.settlement()) return;
 
         String key = structure.id() + "@" + candidate.x + "," + candidate.z;
-        result.putIfAbsent(key, new PredictedSettlement(structure.id(), position));
+        result.putIfAbsent(key, new PredictedSettlement(structure.id(), placement.getLocatePos(candidate)));
     }
 
     private static String siteKey(int siteX, int siteZ) {
@@ -185,17 +206,38 @@ public final class SettlementPredictor {
 
     private record PredictedSettlement(ResourceLocation structureId, BlockPos position) {}
 
-    private record CandidateStructure(ResourceLocation id, Set<Holder<Biome>> biomes) {}
+    /**
+     * A complete StructureSet entry, rather than only League-tagged entries.
+     * Vanilla selects from every entry in a set before it knows whether the
+     * selected structure belongs to League's settlement tag.
+     */
+    private record CandidateStructure(ResourceLocation id, int weight, boolean settlement) {}
 
     private record SetPlan(StructurePlacement placement, List<CandidateStructure> structures) {
-        private CandidateStructure structureFor(Holder<Biome> biome) {
-            return structures.stream().filter(structure -> structure.biomes().contains(biome)).findFirst().orElse(null);
+        /**
+         * Mirrors ChunkGenerator's initial StructureSet choice: a legacy
+         * WorldgenRandom seeded with the world seed and candidate chunk, then
+         * one weighted roll in registry/data-pack order.  Do not replace this
+         * with a biome match or an unordered collection; either changes the
+         * chosen BCA variant and poisons the persistent town identity.
+         */
+        private CandidateStructure structureFor(long worldSeed, ChunkPos candidate) {
+            int totalWeight = structures.stream().mapToInt(CandidateStructure::weight).sum();
+            if (totalWeight <= 0) return null;
+
+            WorldgenRandom random = new WorldgenRandom(new LegacyRandomSource(0L));
+            random.setLargeFeatureSeed(worldSeed, candidate.x, candidate.z);
+            int roll = random.nextInt(totalWeight);
+            for (CandidateStructure structure : structures) {
+                roll -= structure.weight();
+                if (roll < 0) return structure;
+            }
+            return null;
         }
     }
 
     private record Snapshot(long seed, int siteX, int siteZ, int minChunkX, int minChunkZ, int maxChunkX, int maxChunkZ,
-                            ChunkGeneratorStructureState structureState, RandomState randomState, BiomeSource biomeSource,
-                            List<SetPlan> structureSets) {
+                            ChunkGeneratorStructureState structureState, List<SetPlan> structureSets) {
         private static Snapshot capture(ServerLevel level, int siteX, int siteZ) {
             ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
             List<SetPlan> plans = new ArrayList<>();
@@ -204,13 +246,12 @@ public final class SettlementPredictor {
                 for (StructureSet.StructureSelectionEntry entry : setHolder.value().structures()) {
                     Holder<Structure> structure = entry.structure();
                     Optional<ResourceKey<Structure>> key = structure.unwrapKey();
-                    if (key.isPresent() && structure.is(SETTLEMENTS)) {
-                        Set<Holder<Biome>> biomes = new HashSet<>();
-                        structure.value().biomes().forEach(biomes::add);
-                        structures.add(new CandidateStructure(key.get().location(), Set.copyOf(biomes)));
-                    }
+                    key.ifPresent(resourceKey -> structures.add(new CandidateStructure(
+                            resourceKey.location(), entry.weight(), structure.is(SETTLEMENTS))));
                 }
-                if (!structures.isEmpty()) plans.add(new SetPlan(setHolder.value().placement(), List.copyOf(structures)));
+                if (structures.stream().anyMatch(CandidateStructure::settlement)) {
+                    plans.add(new SetPlan(setHolder.value().placement(), List.copyOf(structures)));
+                }
             }
 
             int cellSize = AtlasConfig.get().cellSize;
@@ -219,10 +260,38 @@ public final class SettlementPredictor {
             int minimumBlockZ = siteZ * cellSize - halfCell;
             int maximumBlock = minimumBlock + cellSize - 1;
             int maximumBlockZ = minimumBlockZ + cellSize - 1;
-            return new Snapshot(level.getSeed(), siteX, siteZ,
-                    Math.floorDiv(minimumBlock, 16), Math.floorDiv(minimumBlockZ, 16),
-                    Math.floorDiv(maximumBlock, 16), Math.floorDiv(maximumBlockZ, 16),
-                    state, state.randomState(), level.getChunkSource().getGenerator().getBiomeSource(), List.copyOf(plans));
+            return capture(level, Math.floorDiv(minimumBlock, 16), Math.floorDiv(minimumBlockZ, 16),
+                    Math.floorDiv(maximumBlock, 16), Math.floorDiv(maximumBlockZ, 16), state, plans, siteX, siteZ);
+        }
+
+        private static Snapshot capture(ServerLevel level, int minChunkX, int minChunkZ, int maxChunkX, int maxChunkZ) {
+            ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
+            List<SetPlan> plans = collectPlans(state);
+            AtlasRegion site = RegionPolicyService.atlasRegionAt(level.getSeed(), level.getSharedSpawnPos().getX(), level.getSharedSpawnPos().getZ());
+            return capture(level, minChunkX, minChunkZ, maxChunkX, maxChunkZ, state, plans, site.cellX(), site.cellZ());
+        }
+
+        private static Snapshot capture(ServerLevel level, int minChunkX, int minChunkZ, int maxChunkX, int maxChunkZ,
+                                        ChunkGeneratorStructureState state, List<SetPlan> plans, int siteX, int siteZ) {
+            return new Snapshot(level.getSeed(), siteX, siteZ, minChunkX, minChunkZ, maxChunkX, maxChunkZ,
+                    state, List.copyOf(plans));
+        }
+
+        private static List<SetPlan> collectPlans(ChunkGeneratorStructureState state) {
+            List<SetPlan> plans = new ArrayList<>();
+            for (Holder<StructureSet> setHolder : state.possibleStructureSets()) {
+                List<CandidateStructure> structures = new ArrayList<>();
+                for (StructureSet.StructureSelectionEntry entry : setHolder.value().structures()) {
+                    Holder<Structure> structure = entry.structure();
+                    Optional<ResourceKey<Structure>> key = structure.unwrapKey();
+                    key.ifPresent(resourceKey -> structures.add(new CandidateStructure(
+                            resourceKey.location(), entry.weight(), structure.is(SETTLEMENTS))));
+                }
+                if (structures.stream().anyMatch(CandidateStructure::settlement)) {
+                    plans.add(new SetPlan(setHolder.value().placement(), List.copyOf(structures)));
+                }
+            }
+            return List.copyOf(plans);
         }
     }
 }

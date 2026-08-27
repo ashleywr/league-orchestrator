@@ -1,10 +1,15 @@
 package dev.leagueorchestrator.world;
 
+import dev.leagueorchestrator.LeagueOrchestrator;
 import dev.leagueorchestrator.data.GymArchetype;
 import dev.leagueorchestrator.data.CampaignDefinition;
 import dev.leagueorchestrator.data.LeagueDataReloadListener;
 import dev.regionengine.policy.RegionPolicyService;
 import dev.regionengine.world.atlas.AtlasRegion;
+import dev.regionengine.place.PlaceBounds;
+import dev.regionengine.place.PlaceState;
+import dev.regionengine.place.RegionPlace;
+import dev.regionengine.place.RegionPlaceService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.nbt.CompoundTag;
@@ -34,37 +39,63 @@ import java.util.Set;
 public final class WorldLeaguePlan extends SavedData {
     private static final String DATA_ID = "league_orchestrator_world_plan";
     private static final Factory<WorldLeaguePlan> FACTORY = new Factory<>(WorldLeaguePlan::new, WorldLeaguePlan::load, null);
+    /** The semantic town fringe around a physically observed structure footprint. */
+    private static final int TOWN_ZONE_FRINGE_BLOCKS = 48;
 
     private final Map<String, String> allocations = new HashMap<>();
     private final Map<String, TownAnchor> towns = new HashMap<>();
+    /** Predicted BCA starts that permanently resolved as a route stop, not a town. */
+    private final Map<String, BlockPos> roadsideStops = new HashMap<>();
     private final Map<String, CampaignRoute> campaignRoutes = new HashMap<>();
     private final Set<String> plannedSites = new HashSet<>();
     private final Map<String, String> legendaryClaims = new HashMap<>();
     private final Set<String> claimedRewards = new HashSet<>();
     private final Map<String, String> campaignsByProfile = new HashMap<>();
     private final Map<String, String> rctSeriesByProfile = new HashMap<>();
+    /** New worlds get one League-controlled starter town; existing ledgers are never relocated. */
+    private boolean starterInitialized;
+    private String starterTownKey = "";
+    private BlockPos starterOrigin;
+    private BlockPos starterSpawn;
+    private final Set<String> rejectedStarterTowns = new HashSet<>();
     /** Read once only to migrate worlds created during the global-campaign prototype. */
     private String legacyCampaignId = "";
 
-    public static void ensureAllOverworldPlans(MinecraftServer server) {
-        get(server.overworld());
+    public static void ensureMountedPlan(MinecraftServer server) {
+        get(LeagueMount.level(server));
+    }
+
+    /** Reconciles League's durable town ledger into Region Engine's generic place index. */
+    public static void reconcileRegionPlaces(MinecraftServer server) {
+        get(LeagueMount.level(server)).publishRegionPlaces(LeagueMount.level(server));
     }
 
     /** Re-publish the saved campaign graph after a restart when RoadWeaver is installed. */
     public static void reconcileRoadWeaverCampaign(MinecraftServer server) {
-        ServerLevel level = server.overworld();
+        ServerLevel level = LeagueMount.level(server);
         get(level).publishRoadWeaverCampaign(level);
     }
 
     /** Requeue saved gym anchors so persistent RCT leaders survive restarts and repairs. */
     public static void reconcileRctGymLeaders(MinecraftServer server) {
-        ServerLevel level = server.overworld();
+        ServerLevel level = LeagueMount.level(server);
         get(level).enqueueRctGymLeaders(level);
+    }
+
+    /**
+     * Built-in content packs can become available after the first server data
+     * snapshot. Upgrade only generated Frontier placeholder names once an
+     * explicit profile campaign has arrived; authored and already-resolved
+     * names remain immutable.
+     */
+    public static void reconcileDeferredCampaignContent(MinecraftServer server) {
+        ServerLevel level = LeagueMount.level(server);
+        get(level).upgradeDeferredCampaignContent(level);
     }
 
     /** Revisits only the newly loaded chunk; this never asks Minecraft to load terrain for an addon. */
     public static void reconcileRctGymLeadersInChunk(ServerLevel level, net.minecraft.world.level.chunk.LevelChunk chunk) {
-        if (level != level.getServer().overworld()) return;
+        if (!LeagueMount.isMounted(level)) return;
         get(level).enqueueRctGymLeadersInChunk(level, chunk.getPos().x, chunk.getPos().z);
     }
 
@@ -79,10 +110,19 @@ public final class WorldLeaguePlan extends SavedData {
      */
     public synchronized Optional<CampaignDefinition> campaignFor(ServerLevel level, BlockPos position) {
         ResourceLocation profileId = RegionPolicyService.profileAt(level, position.getX(), position.getZ()).id();
+        var data = LeagueDataReloadListener.current();
+        Optional<CampaignDefinition> exact = data.exactCampaignForProfile(profileId);
         String stored = campaignsByProfile.get(profileId.toString());
         if (stored != null) {
             ResourceLocation storedId = ResourceLocation.tryParse(stored);
             Optional<CampaignDefinition> campaign = storedId == null ? Optional.empty() : LeagueDataReloadListener.current().campaign(storedId);
+            if (campaign.filter(CampaignDefinition::fallback).isPresent() && exact.isPresent()) {
+                CampaignDefinition upgraded = exact.get();
+                campaignsByProfile.put(profileId.toString(), upgraded.id().toString());
+                if (!upgraded.rctSeriesId().isBlank()) rctSeriesByProfile.put(profileId.toString(), upgraded.rctSeriesId());
+                setDirty();
+                return Optional.of(upgraded);
+            }
             campaign.filter(value -> !value.rctSeriesId().isBlank()).ifPresent(value -> {
                 if (rctSeriesByProfile.putIfAbsent(profileId.toString(), value.rctSeriesId()) == null) setDirty();
             });
@@ -91,8 +131,8 @@ public final class WorldLeaguePlan extends SavedData {
 
         ResourceLocation legacy = ResourceLocation.tryParse(legacyCampaignId);
         Optional<CampaignDefinition> resolved = legacy == null
-                ? LeagueDataReloadListener.current().campaignForProfile(profileId)
-                : LeagueDataReloadListener.current().campaign(legacy);
+                ? data.campaignForProfile(profileId)
+                : exact.or(() -> data.campaign(legacy));
         resolved.ifPresent(campaign -> {
             campaignsByProfile.put(profileId.toString(), campaign.id().toString());
             if (!campaign.rctSeriesId().isBlank()) rctSeriesByProfile.put(profileId.toString(), campaign.rctSeriesId());
@@ -156,9 +196,10 @@ public final class WorldLeaguePlan extends SavedData {
         if (existing != null) return Optional.of(existing);
 
         TownAnchor town = new TownAnchor(townId, atlas.cellX(), atlas.cellZ(), center, null, null, center,
-                null, null, GymLeaderState.UNASSIGNED, "");
+                null, null, GymLeaderState.UNASSIGNED, "", townName(level, townId, center));
         towns.put(key, town);
         setDirty();
+        publishRegionPlace(level, town, PlaceState.PREDICTED, null);
         RoadWeaverBridge.publishTown(level, town);
         return Optional.of(town);
     }
@@ -173,8 +214,73 @@ public final class WorldLeaguePlan extends SavedData {
         double maximumDistanceSquared = maximumDistance * maximumDistance;
         return towns.values().stream()
                 .filter(town -> town.siteX() == atlas.cellX() && town.siteZ() == atlas.cellZ())
+                .filter(town -> town.bounds() != null)
                 .filter(town -> town.center().distSqr(position) <= maximumDistanceSquared)
                 .min(Comparator.comparingDouble(town -> town.center().distSqr(position)));
+    }
+
+    /**
+     * Opens the starter-town flow only for a brand-new League ledger. This is
+     * called before the first spawn-site prediction, so upgrading an explored
+     * world cannot silently move its shared spawn.
+     */
+    public synchronized boolean beginStarterTown(BlockPos origin) {
+        if (starterInitialized) return starterOrigin != null && starterSpawn == null;
+        starterInitialized = true;
+        if (!towns.isEmpty() || !plannedSites.isEmpty()) {
+            setDirty();
+            return false;
+        }
+        starterOrigin = origin.immutable();
+        setDirty();
+        return true;
+    }
+
+    /** Selects the closest still-viable predicted town in the initial atlas site. */
+    public synchronized Optional<TownAnchor> reserveNearestStarterTown(ServerLevel level) {
+        if (!starterInitialized || starterOrigin == null || starterSpawn != null) return Optional.empty();
+        if (!starterTownKey.isBlank()) return Optional.ofNullable(towns.get(starterTownKey));
+
+        AtlasRegion originSite = RegionPolicyService.atlasRegionAt(level.getSeed(), starterOrigin.getX(), starterOrigin.getZ());
+        Optional<Map.Entry<String, TownAnchor>> selected = towns.entrySet().stream()
+                .filter(entry -> entry.getValue().siteX() == originSite.cellX() && entry.getValue().siteZ() == originSite.cellZ())
+                .filter(entry -> !roadsideStops.containsKey(entry.getKey()))
+                .filter(entry -> !rejectedStarterTowns.contains(entry.getKey()))
+                .min(Comparator.comparingDouble((Map.Entry<String, TownAnchor> entry) -> entry.getValue().center().distSqr(starterOrigin))
+                        .thenComparing(Map.Entry::getKey));
+        if (selected.isEmpty()) return Optional.empty();
+        starterTownKey = selected.get().getKey();
+        setDirty();
+        return Optional.of(selected.get().getValue());
+    }
+
+    public synchronized boolean isStarterSpawnPending(TownAnchor town) {
+        return starterInitialized && starterSpawn == null && starterTownKey.equals(townKey(town.siteX(), town.siteZ(), town.id()));
+    }
+
+    /** Gives a rejected BCA candidate no further starter priority, then permits a deterministic fallback. */
+    public synchronized boolean rejectStarterTown(TownAnchor town) {
+        String key = townKey(town.siteX(), town.siteZ(), town.id());
+        if (!isStarterSpawnPending(town)) return false;
+        rejectedStarterTowns.add(key);
+        starterTownKey = "";
+        setDirty();
+        return true;
+    }
+
+    /** BCA rejected this predicted start during the new-world bootstrap. */
+    public synchronized boolean wasStarterTownRejected(TownAnchor town) {
+        return rejectedStarterTowns.contains(townKey(town.siteX(), town.siteZ(), town.id()));
+    }
+
+    /** Persists the actual safe apron used as both world spawn and RoadWeaver port. */
+    public synchronized Optional<TownAnchor> completeStarterSpawn(TownAnchor town, BlockPos spawn) {
+        if (!isStarterSpawnPending(town)) return Optional.empty();
+        TownAnchor updated = town.withRoadEndpoint(spawn.immutable());
+        towns.put(starterTownKey, updated);
+        starterSpawn = spawn.immutable();
+        setDirty();
+        return Optional.of(updated);
     }
 
     /** Records a deterministic structure-start prediction without loading a chunk or consulting a heightmap. */
@@ -189,14 +295,20 @@ public final class WorldLeaguePlan extends SavedData {
         TownAnchor town = new TownAnchor(townId, atlas.cellX(), atlas.cellZ(),
                 new BlockPos(predictedStart.getX(), level.getMinBuildHeight(), predictedStart.getZ()), null, null,
                 new BlockPos(predictedStart.getX(), level.getMinBuildHeight(), predictedStart.getZ()), null, null,
-                GymLeaderState.UNASSIGNED, "");
+                GymLeaderState.UNASSIGNED, "", townName(level, townId, predictedStart));
         towns.put(key, town);
         setDirty();
-        RoadWeaverBridge.publishTown(level, town);
+        publishRegionPlace(level, town, PlaceState.PREDICTED, null);
         return Optional.of(town);
     }
 
-    /** Attaches the generated bounding box to a prediction; unknown starts are intentionally ignored. */
+    /**
+     * Confirms an actual generated settlement. A prediction is only a
+     * non-authoritative candidate: third-party jigsaws may reject it after
+     * terrain-sensitive checks or another tagged structure may generate at a
+     * nearby candidate. In that case, record the observed start so gyms and
+     * other structure-dependent content follow the real town.
+     */
     public synchronized Optional<TownAnchor> realizeSettlement(ServerLevel level, ResourceLocation structure,
                                                                  net.minecraft.world.level.ChunkPos startChunk, BoundingBox bounds) {
         String townId = settlementId(structure, startChunk);
@@ -205,16 +317,62 @@ public final class WorldLeaguePlan extends SavedData {
         int centerZ = (bounds.minZ() + bounds.maxZ()) / 2;
         AtlasRegion atlas = RegionPolicyService.atlasRegionAt(level.getSeed(), centerX, centerZ);
         TownAnchor existing = towns.get(townKey(atlas.cellX(), atlas.cellZ(), townId));
-        if (existing == null) return Optional.empty();
-        if (existing.bounds() != null) return Optional.of(existing);
-        TownAnchor realized = existing.withRealizedBounds(new BlockPos(centerX, centerY, centerZ), bounds);
-        towns.put(townKey(existing.siteX(), existing.siteZ(), existing.id()), realized);
+        if (existing != null && existing.bounds() != null) return Optional.of(existing);
+
+        TownAnchor realized = existing == null
+                ? new TownAnchor(townId, atlas.cellX(), atlas.cellZ(), new BlockPos(centerX, centerY, centerZ), bounds,
+                null, new BlockPos(centerX, centerY, centerZ), null, null, GymLeaderState.UNASSIGNED, "", townName(level, townId, new BlockPos(centerX, centerY, centerZ)))
+                : existing.withRealizedBounds(new BlockPos(centerX, centerY, centerZ), bounds);
+        if (realized.name().isBlank()) realized = realized.withName(townName(level, townId, realized.center()));
+        towns.put(townKey(realized.siteX(), realized.siteZ(), realized.id()), realized);
         setDirty();
+        ensureSiteRoadGraph(realized.siteX(), realized.siteZ());
+        publishRegionPlace(level, realized, PlaceState.REALIZED, null);
+        publishRoadWeaverCampaign(level);
         return Optional.of(realized);
+    }
+
+    /**
+     * Returns predicted starts whose authoritative start chunk has just
+     * loaded. A caller may mark only a chunk with no League settlement start
+     * as a roadside stop; that makes a terrain-sensitive BCA rejection
+     * durable rather than leaving a phantom town on a road terminus.
+     */
+    public synchronized List<TownAnchor> pendingTownStartsInChunk(int chunkX, int chunkZ) {
+        return towns.entrySet().stream()
+                .filter(entry -> entry.getValue().bounds() == null)
+                .filter(entry -> !roadsideStops.containsKey(entry.getKey()))
+                .map(Map.Entry::getValue)
+                .filter(town -> (town.center().getX() >> 4) == chunkX && (town.center().getZ() >> 4) == chunkZ)
+                .toList();
+    }
+
+    /** Records the physical marker chosen for a rejected town start. Idempotent per town. */
+    public synchronized boolean markRoadsideStop(ServerLevel level, TownAnchor town, BlockPos marker) {
+        if (town == null || marker == null) return false;
+        String key = townKey(town.siteX(), town.siteZ(), town.id());
+        if (!towns.containsKey(key) || roadsideStops.containsKey(key)) return false;
+        roadsideStops.put(key, marker.immutable());
+        setDirty();
+        publishRegionPlace(level, town, PlaceState.FALLBACK, marker);
+        return true;
+    }
+
+    public synchronized boolean isRoadsideStop(TownAnchor town) {
+        return town != null && roadsideStops.containsKey(townKey(town.siteX(), town.siteZ(), town.id()));
     }
 
     public synchronized boolean isSitePlanned(int siteX, int siteZ) {
         return plannedSites.contains(siteX + "," + siteZ);
+    }
+
+    /** Snapshot for bounded Minecraft-owned town-start warmup after a restart. */
+    public synchronized List<TownAnchor> unrealizedTowns() {
+        return towns.entrySet().stream()
+                .filter(entry -> entry.getValue().bounds() == null)
+                .filter(entry -> !roadsideStops.containsKey(entry.getKey()))
+                .map(Map.Entry::getValue)
+                .toList();
     }
 
     public synchronized void markSitePlanned(int siteX, int siteZ) {
@@ -222,34 +380,20 @@ public final class WorldLeaguePlan extends SavedData {
     }
 
     /**
-     * Builds the initial, sparse road topology for one predicted atlas site.
+     * Builds the initial, sparse road topology for realized towns in one atlas site.
      * It is a deterministic minimum-distance tree rather than a level order:
      * every town is reachable, but the graph leaves room for future planned
-     * shortcuts, caves, ferries, and gates to add non-linear progression.
+     * shortcuts, caves, ferries, and gates to add non-linear progression. The
+     * tree shape itself is computed by {@link RoadGraphPlanner}, which touches
+     * no world state and can be exercised directly in a test.
      */
     public synchronized void ensureSiteRoadGraph(int siteX, int siteZ) {
-        List<String> siteTowns = towns.entrySet().stream()
+        Map<String, BlockPos> sitePositions = towns.entrySet().stream()
                 .filter(entry -> entry.getValue().siteX() == siteX && entry.getValue().siteZ() == siteZ)
-                .map(Map.Entry::getKey)
-                .sorted()
-                .toList();
-        if (siteTowns.size() < 2) return;
-
-        Set<String> connected = new HashSet<>();
-        connected.add(siteTowns.getFirst());
-        while (connected.size() < siteTowns.size()) {
-            RouteCandidate best = null;
-            for (String fromKey : connected) {
-                for (String toKey : siteTowns) {
-                    if (connected.contains(toKey)) continue;
-                    RouteCandidate candidate = new RouteCandidate(fromKey, toKey, townDistanceSquared(fromKey, toKey));
-                    if (best == null || candidate.compareTo(best) < 0) best = candidate;
-                }
-            }
-            if (best == null) return;
-            CampaignRoute route = CampaignRoute.between(best.fromTownKey(), best.toTownKey());
+                .filter(entry -> entry.getValue().bounds() != null)
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().routeEndpoint()));
+        for (CampaignRoute route : RoadGraphPlanner.minimumSpanningTree(sitePositions)) {
             if (campaignRoutes.putIfAbsent(route.id(), route) == null) setDirty();
-            connected.add(best.toTownKey());
         }
     }
 
@@ -344,13 +488,19 @@ public final class WorldLeaguePlan extends SavedData {
         return true;
     }
 
-    /** Publishes only the ledger's selected endpoints and edges to RoadWeaver. */
+    /** Publishes only realized town endpoints and edges to RoadWeaver. */
     public synchronized void publishRoadWeaverCampaign(ServerLevel level) {
-        towns.values().forEach(town -> RoadWeaverBridge.publishTown(level, town));
+        towns.values().stream()
+                .filter(town -> town.bounds() != null)
+                .filter(town -> !isStarterSpawnPending(town))
+                .forEach(town -> RoadWeaverBridge.publishTown(level, town));
         campaignRoutes.values().stream().sorted(Comparator.comparing(CampaignRoute::id)).forEach(route -> {
             TownAnchor from = towns.get(route.fromTownKey());
             TownAnchor to = towns.get(route.toTownKey());
-            if (from != null && to != null) RoadWeaverBridge.connectCampaignRoute(level, route.id(), from, to);
+            if (from != null && from.bounds() != null && !isStarterSpawnPending(from)
+                    && to != null && to.bounds() != null && !isStarterSpawnPending(to)) {
+                RoadWeaverBridge.connectCampaignRoute(level, route.id(), from, to);
+            }
         });
         connectPlacedGyms(level);
     }
@@ -396,14 +546,78 @@ public final class WorldLeaguePlan extends SavedData {
                 .anyMatch(entry -> entry.getKey().startsWith(prefix) && entry.getValue().equals(gymId));
     }
 
-    private static String townKey(int siteX, int siteZ, String townId) {
-        return siteX + "," + siteZ + "|" + townId;
+    /**
+     * Creates a deterministic content-pack display name once, then stores it
+     * in the town ledger. The identifier remains the only gameplay key.
+     */
+    private String townName(ServerLevel level, String townId, BlockPos center) {
+        Optional<CampaignDefinition> campaign = campaignFor(level, center);
+        List<String> candidates = campaign.map(CampaignDefinition::townNames).orElse(List.of());
+        String fallback = "Frontier " + (Math.abs((townId + ":" + center.getX() + ":" + center.getZ()).hashCode()) % 10_000);
+        String scope = campaign.map(value -> value.seedSalt() + "|" + townId + "|" + center.getX() + "," + center.getZ())
+                .orElse(townId + "|" + center.getX() + "," + center.getZ());
+        return RegionPlaceService.chooseName(level.getSeed(), scope, candidates, fallback);
     }
 
-    private double townDistanceSquared(String firstTownKey, String secondTownKey) {
-        TownAnchor first = towns.get(firstTownKey);
-        TownAnchor second = towns.get(secondTownKey);
-        return first.routeEndpoint().distSqr(second.routeEndpoint());
+    private synchronized void upgradeDeferredCampaignContent(ServerLevel level) {
+        boolean changed = false;
+        for (Map.Entry<String, TownAnchor> entry : towns.entrySet()) {
+            TownAnchor town = entry.getValue();
+            if (!isGeneratedFrontierPlaceholder(town.name())) continue;
+            Optional<CampaignDefinition> campaign = campaignFor(level, town.center());
+            if (campaign.isEmpty() || campaign.get().fallback()) continue;
+            entry.setValue(town.withName(townName(level, town.id(), town.center())));
+            changed = true;
+        }
+        if (changed) {
+            setDirty();
+            publishRegionPlaces(level);
+            LeagueOrchestrator.LOGGER.info("Resolved deferred League town names from newly available content-pack data.");
+        }
+    }
+
+    private static boolean isGeneratedFrontierPlaceholder(String name) {
+        return name != null && name.matches("Frontier \\d{1,4}");
+    }
+
+    private void publishRegionPlaces(ServerLevel level) {
+        towns.forEach((key, town) -> {
+            TownAnchor named = town;
+            if (town.name().isBlank()) {
+                named = town.withName(townName(level, town.id(), town.center()));
+                towns.put(key, named);
+                setDirty();
+            }
+            if (roadsideStops.containsKey(key)) {
+                publishRegionPlace(level, named, PlaceState.FALLBACK, roadsideStops.get(key));
+            } else {
+                publishRegionPlace(level, named, named.bounds() == null ? PlaceState.PREDICTED : PlaceState.REALIZED, null);
+            }
+        });
+    }
+
+    private void publishRegionPlace(ServerLevel level, TownAnchor town, PlaceState state, BlockPos fallbackMarker) {
+        BlockPos center = fallbackMarker == null ? town.center() : fallbackMarker;
+        PlaceBounds bounds = state == PlaceState.REALIZED && town.bounds() != null
+                ? PlaceBounds.from(town.bounds()).expandedBy(TOWN_ZONE_FRINGE_BLOCKS)
+                : PlaceBounds.around(center.getX(), center.getZ(), state == PlaceState.PREDICTED ? 0 : 8);
+        String normalizedTown = town.id().toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9_./-]", "_");
+        String placePath = "town/" + town.siteX() + "_" + town.siteZ() + "/" + normalizedTown;
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(LeagueOrchestrator.MOD_ID, placePath);
+        Set<String> tags = new HashSet<>();
+        if (state == PlaceState.FALLBACK) {
+            tags.addAll(Set.of("place", "route_stop", "fallback"));
+        } else {
+            tags.addAll(Set.of("place", "town", "settlement", "atlas_site:" + town.siteX() + "," + town.siteZ()));
+            tags.add("region_profile:" + RegionPolicyService.profileAt(level, center.getX(), center.getZ()).id());
+            campaignIdFor(level, center).ifPresent(campaign -> tags.add("league_campaign:" + campaign));
+        }
+        RegionPlaceService.upsert(level, new RegionPlace(id, town.name(), state == PlaceState.FALLBACK ? "route_stop" : "town",
+                tags, bounds, state));
+    }
+
+    private static String townKey(int siteX, int siteZ, String townId) {
+        return siteX + "," + siteZ + "|" + townId;
     }
 
     private static String settlementId(ResourceLocation structure, net.minecraft.world.level.ChunkPos startChunk) {
@@ -414,7 +628,8 @@ public final class WorldLeaguePlan extends SavedData {
         return prefix + "_" + startChunk.x + "_" + startChunk.z;
     }
 
-    private static GymArchetype weightedPick(List<GymArchetype> candidates, long worldSeed, String allocationKey) {
+    /** Package-visible (not private) so a pure-logic test can exercise allocation shape directly. */
+    static GymArchetype weightedPick(List<GymArchetype> candidates, long worldSeed, String allocationKey) {
         candidates.sort(Comparator.comparing(gym -> gym.id().toString()));
         int total = candidates.stream().mapToInt(GymArchetype::weight).sum();
         int roll = RandomSource.create(worldSeed ^ allocationKey.hashCode()).nextInt(total);
@@ -448,6 +663,25 @@ public final class WorldLeaguePlan extends SavedData {
         for (int index = 0; index < townEntries.size(); index++) {
             TownAnchor town = TownAnchor.load(townEntries.getCompound(index));
             plan.towns.put(townKey(town.siteX(), town.siteZ(), town.id()), town);
+        }
+        ListTag stopEntries = tag.getList("roadside_stops", CompoundTag.TAG_COMPOUND);
+        for (int index = 0; index < stopEntries.size(); index++) {
+            CompoundTag entry = stopEntries.getCompound(index);
+            if (entry.contains("town") && entry.contains("marker")) {
+                plan.roadsideStops.put(entry.getString("town"), BlockPos.of(entry.getLong("marker")));
+            }
+        }
+        if (tag.contains("starter_initialized")) {
+            plan.starterInitialized = tag.getBoolean("starter_initialized");
+            plan.starterTownKey = tag.getString("starter_town");
+            plan.starterOrigin = tag.contains("starter_origin") ? BlockPos.of(tag.getLong("starter_origin")) : null;
+            plan.starterSpawn = tag.contains("starter_spawn") ? BlockPos.of(tag.getLong("starter_spawn")) : null;
+            ListTag rejected = tag.getList("rejected_starter_towns", CompoundTag.TAG_STRING);
+            for (int index = 0; index < rejected.size(); index++) plan.rejectedStarterTowns.add(rejected.getString(index));
+        } else if (!plan.towns.isEmpty() || !plan.plannedSites.isEmpty()) {
+            // A ledger from before starter towns has already made worldgen
+            // decisions. Preserve its existing shared spawn on upgrade.
+            plan.starterInitialized = true;
         }
         ListTag routeEntries = tag.getList("campaign_routes", CompoundTag.TAG_COMPOUND);
         for (int index = 0; index < routeEntries.size(); index++) {
@@ -493,12 +727,27 @@ public final class WorldLeaguePlan extends SavedData {
             plannedEntries.add(entry);
         });
         tag.put("planned_sites", plannedEntries);
+        tag.putBoolean("starter_initialized", starterInitialized);
+        if (!starterTownKey.isBlank()) tag.putString("starter_town", starterTownKey);
+        if (starterOrigin != null) tag.putLong("starter_origin", starterOrigin.asLong());
+        if (starterSpawn != null) tag.putLong("starter_spawn", starterSpawn.asLong());
+        ListTag rejectedStarterEntries = new ListTag();
+        rejectedStarterTowns.stream().sorted().map(StringTag::valueOf).forEach(rejectedStarterEntries::add);
+        tag.put("rejected_starter_towns", rejectedStarterEntries);
         ListTag townEntries = new ListTag();
         towns.values().stream()
                 .sorted(Comparator.comparing(town -> townKey(town.siteX(), town.siteZ(), town.id())))
                 .map(TownAnchor::save)
                 .forEach(townEntries::add);
         tag.put("towns", townEntries);
+        ListTag roadsideStopEntries = new ListTag();
+        roadsideStops.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            CompoundTag stop = new CompoundTag();
+            stop.putString("town", entry.getKey());
+            stop.putLong("marker", entry.getValue().asLong());
+            roadsideStopEntries.add(stop);
+        });
+        tag.put("roadside_stops", roadsideStopEntries);
         ListTag routeEntries = new ListTag();
         campaignRoutes.values().stream()
                 .sorted(Comparator.comparing(CampaignRoute::id))
@@ -517,16 +766,5 @@ public final class WorldLeaguePlan extends SavedData {
         claimedRewards.stream().sorted().map(StringTag::valueOf).forEach(rewardEntries::add);
         tag.put("claimed_rewards", rewardEntries);
         return tag;
-    }
-
-    private record RouteCandidate(String fromTownKey, String toTownKey, double distanceSquared)
-            implements Comparable<RouteCandidate> {
-        @Override
-        public int compareTo(RouteCandidate other) {
-            int distance = Double.compare(distanceSquared, other.distanceSquared);
-            if (distance != 0) return distance;
-            int from = fromTownKey.compareTo(other.fromTownKey);
-            return from != 0 ? from : toTownKey.compareTo(other.toTownKey);
-        }
     }
 }

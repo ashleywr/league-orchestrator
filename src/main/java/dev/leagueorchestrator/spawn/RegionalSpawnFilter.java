@@ -3,11 +3,11 @@ package dev.leagueorchestrator.spawn;
 import com.cobblemon.mod.common.api.events.entity.SpawnEvent;
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
 import dev.leagueorchestrator.data.LeagueDataReloadListener;
+import dev.leagueorchestrator.world.LeagueMount;
 import dev.regionengine.policy.RegionPolicyService;
 import dev.regionengine.policy.RegionProfile;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.Level;
 
 /**
  * Enforces the regional allow/deny pools defined in Region Engine profiles.
@@ -20,7 +20,7 @@ public final class RegionalSpawnFilter {
     public static void filter(SpawnEvent<PokemonEntity> event) {
         PokemonEntity entity = event.getEntity();
         if (!(entity.level() instanceof ServerLevel level)
-                || !level.dimension().equals(Level.OVERWORLD)
+                || !LeagueMount.isMounted(level)
                 || entity.getSpawnCause() == null) {
             return;
         }
