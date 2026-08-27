@@ -25,13 +25,23 @@ dependencies {
 
     // Local development contracts only. The released mod declares both as
     // runtime dependencies and never embeds either jar.
-    modCompileOnly files('../../region-engine/repo/build/libs/region_engine-0.7.0.jar')
+    modCompileOnly files('../../Region Engine/repo/build/libs/region_engine-0.7.0.jar')
     def cobblemonDevJar = providers.gradleProperty('cobblemon_dev_jar').orNull
     if (cobblemonDevJar == null) {
         throw new GradleException('Set -Pcobblemon_dev_jar=<path to Cobblemon Fabric jar> for local development.')
     }
     modCompileOnly files(cobblemonDevJar)
     compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.0.0'
+
+    // Plain JUnit for pure-logic shape tests (road graph, gym allocation).
+    // These never boot a server or a Minecraft client; they exercise
+    // deterministic algorithms directly. See src/test/java.
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 processResources {
