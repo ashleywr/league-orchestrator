@@ -14,12 +14,15 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /** Minimal operator diagnostics while authored gym-site placement is added. */
 public final class LeagueCommands {
@@ -44,6 +47,9 @@ public final class LeagueCommands {
                 .then(Commands.literal("site")
                         .requires(source -> source.hasPermission(2))
                         .executes(LeagueCommands::site))
+                .then(Commands.literal("predicted")
+                        .requires(source -> source.hasPermission(2))
+                        .executes(LeagueCommands::predicted))
                 .then(Commands.literal("claim")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("pool", StringArgumentType.word())
@@ -87,6 +93,52 @@ public final class LeagueCommands {
                     "Travelled to " + target.dimension().location()
                             + ". Use /league travel again to return."), false);
         }
+        return 1;
+    }
+
+    /**
+     * Lists the town chunks League predicts near the player, straight from the
+     * active placement's pure seed maths.
+     *
+     * <p>The prediction depends only on the world seed, never on which
+     * dimension is asking, so two worlds sharing a seed must print the same
+     * list whether League is mounted in the overworld or in its own dimension.
+     * Running this in each and diffing the output is the check that mounting
+     * elsewhere did not move anything.
+     */
+    private static int predicted(CommandContext<CommandSourceStack> context)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getPlayerOrException();
+        int radius = 96;
+        int centreX = player.chunkPosition().x;
+        int centreZ = player.chunkPosition().z;
+        long seed = source.getServer().getWorldData().worldGenOptions().seed();
+
+        List<String> lines = source.getServer().registryAccess()
+                .registryOrThrow(Registries.STRUCTURE_SET).entrySet().stream()
+                .filter(entry -> entry.getValue().placement() instanceof LeagueTownStructurePlacement)
+                .map(entry -> {
+                    LeagueTownStructurePlacement placement =
+                            (LeagueTownStructurePlacement) entry.getValue().placement();
+                    String chunks = placement.potentialChunks(seed,
+                                    centreX - radius, centreZ - radius, centreX + radius, centreZ + radius)
+                            .stream()
+                            .map(pos -> pos.x + "," + pos.z)
+                            .collect(Collectors.joining(" "));
+                    return entry.getKey().location() + " -> " + (chunks.isEmpty() ? "(none)" : chunks);
+                })
+                .toList();
+
+        if (lines.isEmpty()) {
+            source.sendFailure(Component.literal(
+                    "No League town placement is active. Enable a content pack that supplies one."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal(
+                "Seed " + seed + ", chunks within " + radius + " of " + centreX + "," + centreZ
+                        + " (dimension " + player.level().dimension().location() + "):"), false);
+        lines.forEach(line -> source.sendSuccess(() -> Component.literal("  " + line), false));
         return 1;
     }
 
