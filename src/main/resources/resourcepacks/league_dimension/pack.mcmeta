@@ -1,0 +1,6 @@
+{
+  "pack": {
+    "description": "League Orchestrator — the League dimension. Enable at world creation when mount is instanced_dimension.",
+    "pack_format": 48
+  }
+}

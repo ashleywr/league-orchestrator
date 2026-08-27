@@ -5,6 +5,7 @@ import com.sanhiruzu.leagueorchestrator.config.LeagueConfig;
 import com.sanhiruzu.leagueorchestrator.data.LeagueDataReloadListener;
 import com.sanhiruzu.leagueorchestrator.spawn.RegionalSpawnFilter;
 import com.sanhiruzu.leagueorchestrator.world.LeagueCommands;
+import com.sanhiruzu.leagueorchestrator.world.LeagueMount;
 import com.sanhiruzu.leagueorchestrator.world.LeagueWorldgen;
 import com.sanhiruzu.leagueorchestrator.world.AutoTownGymPlacement;
 import com.sanhiruzu.leagueorchestrator.world.RoadWeaverBridge;
@@ -18,6 +19,7 @@ import com.sanhiruzu.leagueorchestrator.world.WorldLeaguePlan;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.fabric.api.resource.ResourcePackActivationType;
@@ -50,9 +52,18 @@ public final class LeagueOrchestrator implements ModInitializer {
         } else {
             LOGGER.info("BCA pilot content is unavailable because cobblemon-additions is not installed; Frontier remains available.");
         }
+        ResourceManagerHelper.registerBuiltinResourcePack(
+                ResourceLocation.fromNamespaceAndPath(MOD_ID, "league_dimension"),
+                FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
+                ResourcePackActivationType.NORMAL
+        );
         ResourceManagerHelper.get(PackType.SERVER_DATA)
                 .registerReloadListener(new LeagueDataReloadListener());
+        // Resolve before any level loads, so classification below is correct.
+        ServerLifecycleEvents.SERVER_STARTING.register(LeagueMount::resolve);
+        ServerWorldEvents.LOAD.register((server, level) -> LeagueMount.classify(level));
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            LeagueMount.verifyAtlasScope(server);
             WorldLeaguePlan.ensureMountedPlan(server);
             WorldLeaguePlan.reconcileRegionPlaces(server);
             WorldLeaguePlan.reconcileRoadWeaverCampaign(server);
@@ -64,6 +75,7 @@ public final class LeagueOrchestrator implements ModInitializer {
             SettlementPredictor.planSpawnSite(server);
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            LeagueMount.clear();
             SettlementPredictor.stop();
             TownStartPrewarmer.stop();
             StarterTownBootstrap.stop();

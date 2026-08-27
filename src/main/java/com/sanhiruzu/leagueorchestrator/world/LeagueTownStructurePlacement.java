@@ -106,6 +106,12 @@ public final class LeagueTownStructurePlacement extends StructurePlacement {
 
     @Override
     protected boolean isPlacementChunk(ChunkGeneratorStructureState state, int chunkX, int chunkZ) {
+        // Structure sets are registry-global, so this placement is consulted
+        // for every dimension that runs structure generation. Only the mounted
+        // League dimension may grow League towns; a hub overworld must not.
+        if (!LeagueMount.isMountedState(state)) {
+            return false;
+        }
         ChunkPos current = new ChunkPos(chunkX, chunkZ);
         AtlasRegion region = AtlasMath.classify(state.getLevelSeed(), current.getMiddleBlockX(), current.getMiddleBlockZ());
         return region.kind() == AtlasRegion.Kind.CONTINENT

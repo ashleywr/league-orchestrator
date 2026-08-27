@@ -33,15 +33,17 @@ public final class LeagueConfig {
 
     /** Mount point value meaning League generates into the main world. */
     public static final String MOUNT_MAIN_WORLD = "main_world";
-    /** Mount point value meaning League generates into its own dimension. Not yet implemented. */
+    /** Mount point value meaning League generates into its own dimension. */
     public static final String MOUNT_INSTANCED_DIMENSION = "instanced_dimension";
 
     /**
      * Where League content generates. {@code main_world} puts the campaign in
      * the world players already inhabit, which is the solo and small co-op
-     * shape. {@code instanced_dimension} is reserved for a separate League
-     * dimension beside a persistent social overworld; it is not implemented
-     * yet and is refused during validation rather than silently ignored.
+     * shape. {@code instanced_dimension} generates into League's own dimension
+     * beside a persistent social overworld. It needs the bundled
+     * {@code league_dimension} datapack enabled at world creation, and Region
+     * Engine's {@code atlasDimensions} to cover that dimension; both are
+     * checked at startup and reported rather than assumed.
      */
     public String mount = MOUNT_MAIN_WORLD;
 
@@ -106,18 +108,10 @@ public final class LeagueConfig {
     private void validate() {
         if (mount == null || mount.isBlank()) {
             mount = MOUNT_MAIN_WORLD;
-        } else if (!MOUNT_MAIN_WORLD.equals(mount)) {
-            // Accepting a mount League cannot honour would put a campaign
-            // somewhere the operator did not choose. Refuse loudly instead.
-            if (MOUNT_INSTANCED_DIMENSION.equals(mount)) {
-                LeagueOrchestrator.LOGGER.warn(
-                        "mount '{}' is not implemented yet; running in '{}'.",
-                        MOUNT_INSTANCED_DIMENSION, MOUNT_MAIN_WORLD);
-            } else {
-                LeagueOrchestrator.LOGGER.warn(
-                        "Unknown mount '{}'; running in '{}'. Valid values: {}, {}.",
-                        mount, MOUNT_MAIN_WORLD, MOUNT_MAIN_WORLD, MOUNT_INSTANCED_DIMENSION);
-            }
+        } else if (!MOUNT_MAIN_WORLD.equals(mount) && !MOUNT_INSTANCED_DIMENSION.equals(mount)) {
+            LeagueOrchestrator.LOGGER.warn(
+                    "Unknown mount '{}'; running in '{}'. Valid values: {}, {}.",
+                    mount, MOUNT_MAIN_WORLD, MOUNT_MAIN_WORLD, MOUNT_INSTANCED_DIMENSION);
             mount = MOUNT_MAIN_WORLD;
         }
 
