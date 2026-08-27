@@ -88,3 +88,32 @@ League will save a seeded finite graph before placing blocks. This renderer is
 not live yet; content should not depend on raw NBT or jigsaw connectors being
 automatically recognized as League road ports. See
 [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Villages: never restate vanilla
+
+A campaign pack that overrides `minecraft:villages` is competing with whatever
+village mod the pack already ships. Two techniques are in play and they need
+opposite handling:
+
+- **Runtime pool injection** - CTOV and Better Village ship *no* structure
+  files at all. They replace the buildings inside vanilla village jigsaw pools
+  while the game runs, so `minecraft:village_plains` still generates but is no
+  longer a vanilla village. Listing the vanilla structures is correct with
+  these installed and wrong without them.
+- **Structure set replacement** - BCA overrides `minecraft:villages` with
+  `bca:village/*`. Whichever pack loads last wins, so a League override that
+  restates the vanilla list can silently reinstate plain villages.
+
+League overrides `minecraft:villages` only to apply the
+`league_orchestrator:outside_league` placement, which switches villages off
+inside the mounted League dimension so the campaign's own towns are the only
+settlements there. When it does, it must **restate the active provider's
+structure list unchanged** rather than substituting vanilla structures - the
+override is about *where* villages generate, never *which* ones.
+
+The Kanto pack therefore carries BCA's thirteen entries and BCA's spread values
+verbatim, changing only the placement type.
+
+Do not reach for a structure-toggle mod to suppress vanilla villages. With an
+improving mod installed there is no unaltered vanilla village to suppress, and
+without one the structure list is the honest place to say so.

@@ -1,15 +1,24 @@
 {
   "placement": {
     "type": "league_orchestrator:outside_league",
-    "salt": 10387312,
-    "separation": 8,
+    "spread_type": "triangular",
+    "salt": 31415926,
+    "separation": 10,
     "spacing": 34
   },
   "structures": [
-    { "structure": "minecraft:village_plains",  "weight": 1 },
-    { "structure": "minecraft:village_desert",  "weight": 1 },
-    { "structure": "minecraft:village_savanna", "weight": 1 },
-    { "structure": "minecraft:village_snowy",   "weight": 1 },
-    { "structure": "minecraft:village_taiga",   "weight": 1 }
+    { "structure": "bca:village/default_small", "weight": 16 },
+    { "structure": "bca:village/default_mid", "weight": 11 },
+    { "structure": "bca:village/default_large", "weight": 2 },
+    { "structure": "bca:village/dark_small", "weight": 16 },
+    { "structure": "bca:village/dark_mid", "weight": 11 },
+    { "structure": "bca:village/fairy_small", "weight": 16 },
+    { "structure": "bca:village/fairy_mid", "weight": 11 },
+    { "structure": "bca:village/fighting_small", "weight": 16 },
+    { "structure": "bca:village/fighting_mid", "weight": 11 },
+    { "structure": "bca:village/fighting_large", "weight": 2 },
+    { "structure": "bca:village/ice_small", "weight": 16 },
+    { "structure": "bca:village/ice_mid", "weight": 11 },
+    { "structure": "bca:village/ice_large", "weight": 2 }
   ]
 }
