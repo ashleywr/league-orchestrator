@@ -23,6 +23,11 @@ import java.nio.file.Path;
  * bands. Those are campaign design, and letting a server tune them would
  * silently unbalance a pack the author tested. They stay in content packs.
  *
+ * <p>Where League mounts is deliberately absent. That is decided by the world
+ * type chosen at creation - a world containing the League dimension mounts
+ * there - so the world itself is the single source of truth and no config
+ * value can disagree with it.
+ *
  * <p>Read once at startup, mirroring Region Engine's AtlasConfig.
  */
 public final class LeagueConfig {
@@ -30,22 +35,6 @@ public final class LeagueConfig {
     private static final Path PATH = FabricLoader.getInstance().getConfigDir()
             .resolve("league-orchestrator.json");
     private static LeagueConfig current = defaults();
-
-    /** Mount point value meaning League generates into the main world. */
-    public static final String MOUNT_MAIN_WORLD = "main_world";
-    /** Mount point value meaning League generates into its own dimension. */
-    public static final String MOUNT_INSTANCED_DIMENSION = "instanced_dimension";
-
-    /**
-     * Where League content generates. {@code main_world} puts the campaign in
-     * the world players already inhabit, which is the solo and small co-op
-     * shape. {@code instanced_dimension} generates into League's own dimension
-     * beside a persistent social overworld. It needs the bundled
-     * {@code league_dimension} datapack enabled at world creation, and Region
-     * Engine's {@code atlasDimensions} to cover that dimension; both are
-     * checked at startup and reported rather than assumed.
-     */
-    public String mount = MOUNT_MAIN_WORLD;
 
     /**
      * Per-tick nanosecond budget for optional provider work (RoadWeaver and
@@ -106,15 +95,6 @@ public final class LeagueConfig {
     }
 
     private void validate() {
-        if (mount == null || mount.isBlank()) {
-            mount = MOUNT_MAIN_WORLD;
-        } else if (!MOUNT_MAIN_WORLD.equals(mount) && !MOUNT_INSTANCED_DIMENSION.equals(mount)) {
-            LeagueOrchestrator.LOGGER.warn(
-                    "Unknown mount '{}'; running in '{}'. Valid values: {}, {}.",
-                    mount, MOUNT_MAIN_WORLD, MOUNT_MAIN_WORLD, MOUNT_INSTANCED_DIMENSION);
-            mount = MOUNT_MAIN_WORLD;
-        }
-
         // One tick is 50ms. A budget at or above that measures nothing.
         serverActionBudgetNanos = Math.max(500_000L, Math.min(25_000_000L, serverActionBudgetNanos));
         maxStartupTownCandidates = Math.max(1, Math.min(32, maxStartupTownCandidates));

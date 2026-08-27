@@ -55,35 +55,33 @@ once at startup and clamped to safe ranges on load.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `mount` | `main_world` | Where League content generates. `instanced_dimension` uses League's own dimension &mdash; see below. |
 | `serverActionBudgetNanos` | `5000000` | Per-tick budget for optional RoadWeaver/RCT work. Exceeding it logs a slow-action warning; it never cancels work in flight. |
 | `maxStartupTownCandidates` | `3` | Predicted towns a new world will try before leaving the shared spawn where vanilla put it. Each attempt loads chunks. |
 | `maxStartupRouteCandidates` | `12` | Predicted towns considered for the first RoadWeaver endpoint. |
 | `externalStructureLoadRadius` | `128` | Blocks force-loaded around an external gym structure before placement. |
 | `rctLeaderActivationDistance` | `192.0` | How close a player must be before a saved RCT leader is reconciled. Never forces chunk loading. |
 
-### Mounting in the League dimension
+### Where the campaign generates
 
-`mount: instanced_dimension` generates the campaign into
-`league_orchestrator:league` instead of the world players inhabit, so a server
-can keep a plain persistent overworld as its social hub. Three things must line
-up, all of them fixed at world creation:
+Chosen once, on the **World Type** button when creating the world:
 
-1. Enable the bundled `league_dimension` datapack when creating the world. It
-   supplies the dimension; the mount is only policy. If the dimension is
-   missing League logs an error and stays in the overworld rather than
-   generating the campaign in the hub.
-2. Set Region Engine's `atlasDimensions` to cover `league_orchestrator:league`
-   before creating the world. Towns are placed against Atlas continents, so a
-   League dimension outside the Atlas scope has no continents to place them on.
-   League checks this at startup and reports it.
-3. Decide whether the hub overworld keeps Atlas geography. Leaving
-   `minecraft:overworld` out of `atlasDimensions` gives a vanilla overworld;
-   including it gives Atlas geography in both.
+| World type | Result |
+|---|---|
+| `Normal` (or any vanilla type) | The campaign generates in the overworld. Solo and small co-op shape. |
+| `League Dimension` | The campaign generates in `league_orchestrator:league`. The overworld stays a plain persistent world, which is the shape a server wants for a social hub. |
 
-Atlas scope cannot change once a world has terrain, so all three are new-world
-decisions. League towns are gated to the mounted dimension by structure
-placement, so no League town generates in a hub overworld.
+That is the whole decision. There is no `mount` setting, because the world
+itself is the source of truth: League mounts wherever the League dimension
+exists, so no configuration can disagree with the world it is running against.
+Picking the League world type also tells Region Engine to shape that dimension
+and leave the overworld alone.
+
+League towns are gated to the mounted dimension by structure placement, so a
+hub overworld never grows one.
+
+Dimension layout and Atlas scope are both fixed when a world is created and
+cannot be changed afterwards - terrain generated under one rule and terrain
+generated under another will not meet.
 
 Gym allocation ratios, town tiering, and encounter bands are deliberately absent.
 Those are campaign design: a server tuning them would silently unbalance a pack

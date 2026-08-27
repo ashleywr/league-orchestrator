@@ -1,0 +1,4 @@
+{
+  "generator.league_orchestrator.league_dimension": "League Dimension",
+  "generator.league_orchestrator.league_dimension.info": "Campaign generates in its own dimension. The overworld stays a plain persistent world."
+}

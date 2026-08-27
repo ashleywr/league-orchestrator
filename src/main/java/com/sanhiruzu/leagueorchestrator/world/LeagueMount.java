@@ -1,7 +1,7 @@
 package com.sanhiruzu.leagueorchestrator.world;
 
 import com.sanhiruzu.leagueorchestrator.LeagueOrchestrator;
-import com.sanhiruzu.leagueorchestrator.config.LeagueConfig;
+import com.sanhiruzu.regionengine.world.atlas.AtlasScope;
 import com.sanhiruzu.regionengine.world.atlas.AtlasScopeData;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -24,17 +24,18 @@ import java.util.Set;
  * League subsystem that needs "the League world" asks here rather than
  * assuming {@code server.overworld()}, so that choice stays in one place.
  *
- * <p>The mount point is server policy, read from
- * {@link LeagueConfig}. Resolution is settled once per server start rather
- * than per call, because a missing dimension must be reported once and then
- * degraded from, not logged on every worldgen query.
+ * <p>The mount is decided by the world, not by configuration: a world created
+ * with the League Dimension world type contains {@link #LEAGUE_DIMENSION} and
+ * mounts there; any other world mounts in the overworld. Because the dimension
+ * set is fixed when a world is created, this cannot drift, and there is no
+ * config value that can disagree with the world it is running against.
  *
  * <p>{@link WorldLeaguePlan} is per-level
  * {@link net.minecraft.world.level.saveddata.SavedData}, so a plan follows its
  * mounted dimension without migration.
  */
 public final class LeagueMount {
-    /** Dimension supplied by the bundled {@code league_dimension} datapack. */
+    /** Dimension supplied by the {@code league_orchestrator:league_dimension} world preset. */
     public static final ResourceKey<Level> LEAGUE_DIMENSION = ResourceKey.create(
             Registries.DIMENSION,
             ResourceLocation.fromNamespaceAndPath(LeagueOrchestrator.MOD_ID, "league"));
@@ -59,23 +60,19 @@ public final class LeagueMount {
      */
     public static void resolve(MinecraftServer server) {
         MOUNTED_STATES.clear();
-        if (!LeagueConfig.MOUNT_INSTANCED_DIMENSION.equals(LeagueConfig.get().mount)) {
-            resolved = Level.OVERWORLD;
-            return;
-        }
-        if (server.getLevel(LEAGUE_DIMENSION) == null) {
-            // The mount is policy but the dimension is data. An operator can
-            // ask for one without enabling the other, and generating the
-            // campaign in the hub would be worse than refusing.
-            LeagueOrchestrator.LOGGER.error(
-                    "mount is '{}' but dimension {} does not exist. Enable the league_dimension "
-                            + "datapack at world creation. Falling back to the overworld.",
-                    LeagueConfig.MOUNT_INSTANCED_DIMENSION, LEAGUE_DIMENSION.location());
-            resolved = Level.OVERWORLD;
-            return;
-        }
-        resolved = LEAGUE_DIMENSION;
-        LeagueOrchestrator.LOGGER.info("League content is mounted in {}", LEAGUE_DIMENSION.location());
+        // SERVER_STARTING runs before levels are created, so ask the dimension
+        // registry rather than the level map. The registry comes from world
+        // data and is already populated here.
+        boolean hasLeagueDimension = server.registryAccess()
+                .registryOrThrow(Registries.LEVEL_STEM)
+                .containsKey(ResourceKey.create(Registries.LEVEL_STEM, LEAGUE_DIMENSION.location()));
+        resolved = hasLeagueDimension ? LEAGUE_DIMENSION : Level.OVERWORLD;
+        LeagueOrchestrator.LOGGER.info("League content is mounted in {}", resolved.location());
+        // Region Engine records Atlas scope when a new world first runs, which
+        // happens after this. Telling it now means the world type is the only
+        // decision an operator makes: picking the League Dimension world type
+        // shapes the League dimension and leaves the hub overworld vanilla.
+        AtlasScope.suggestDefaultScope(Set.of(resolved.location().toString()));
     }
 
     /** The level League generates and plans into. */
