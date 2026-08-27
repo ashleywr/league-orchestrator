@@ -14,6 +14,12 @@ public final class LeagueWorldgen {
             () -> LeagueTownStructurePlacement.CODEC
     );
 
+    public static final StructurePlacementType<OutsideLeaguePlacement> OUTSIDE_LEAGUE = Registry.register(
+            BuiltInRegistries.STRUCTURE_PLACEMENT,
+            ResourceLocation.fromNamespaceAndPath(LeagueOrchestrator.MOD_ID, "outside_league"),
+            () -> OutsideLeaguePlacement.CODEC
+    );
+
     private LeagueWorldgen() {}
 
     /** Forces static registration before the server decodes structure-set datapacks. */

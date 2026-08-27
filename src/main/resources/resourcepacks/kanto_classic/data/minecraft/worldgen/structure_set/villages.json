@@ -1,17 +1,15 @@
 {
   "placement": {
-    "type": "league_orchestrator:planned_town",
-    "salt": 31415926,
-    "towns_per_continent": 10,
-    "minimum_separation": 16,
-    "slot_start": 0,
-    "slot_count": 4
+    "type": "league_orchestrator:outside_league",
+    "salt": 10387312,
+    "separation": 8,
+    "spacing": 34
   },
   "structures": [
-    { "structure": "bca:village/default_small", "weight": 8 },
-    { "structure": "bca:village/dark_small", "weight": 8 },
-    { "structure": "bca:village/fairy_small", "weight": 8 },
-    { "structure": "bca:village/fighting_small", "weight": 8 },
-    { "structure": "bca:village/ice_small", "weight": 8 }
+    { "structure": "minecraft:village_plains",  "weight": 1 },
+    { "structure": "minecraft:village_desert",  "weight": 1 },
+    { "structure": "minecraft:village_savanna", "weight": 1 },
+    { "structure": "minecraft:village_snowy",   "weight": 1 },
+    { "structure": "minecraft:village_taiga",   "weight": 1 }
   ]
 }
