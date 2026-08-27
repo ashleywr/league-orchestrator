@@ -16,6 +16,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.Optional;
@@ -27,17 +28,28 @@ public final class LeagueCommands {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext context,
                                 Commands.CommandSelection selection) {
         dispatcher.register(Commands.literal("league")
-                .requires(source -> source.hasPermission(2))
-                .then(Commands.literal("info").executes(LeagueCommands::info))
+                // Travel is for players; everything else is operator tooling,
+                // so the permission gate sits on the admin subtrees instead of
+                // on the root.
+                .then(Commands.literal("travel").executes(LeagueCommands::travel))
+                .then(Commands.literal("info")
+                        .requires(source -> source.hasPermission(2))
+                        .executes(LeagueCommands::info))
                 .then(Commands.literal("integration")
+                        .requires(source -> source.hasPermission(2))
                         .then(Commands.literal("status").executes(LeagueCommands::integrationStatus)))
                 .then(Commands.literal("trainers")
+                        .requires(source -> source.hasPermission(2))
                         .then(Commands.literal("reload").executes(LeagueCommands::reloadTrainers)))
-                .then(Commands.literal("site").executes(LeagueCommands::site))
+                .then(Commands.literal("site")
+                        .requires(source -> source.hasPermission(2))
+                        .executes(LeagueCommands::site))
                 .then(Commands.literal("claim")
+                        .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("pool", StringArgumentType.word())
                                 .executes(LeagueCommands::claim)))
                 .then(Commands.literal("town")
+                        .requires(source -> source.hasPermission(2))
                         .then(Commands.literal("nearest").executes(LeagueCommands::nearestTown))
                         .then(Commands.literal("register")
                                 .then(Commands.argument("id", StringArgumentType.word())
@@ -54,6 +66,28 @@ public final class LeagueCommands {
                                 .then(Commands.argument("id", StringArgumentType.word())
                                         .then(Commands.argument("pool", StringArgumentType.word())
                                                 .executes(LeagueCommands::placeTownGym))))));
+    }
+
+    private static int travel(CommandContext<CommandSourceStack> context)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getPlayerOrException();
+        if (!LeagueTravel.isAvailable(source.getServer())) {
+            source.sendFailure(Component.literal(
+                    "This world has no separate League dimension. The campaign is in the overworld."));
+            return 0;
+        }
+        if (LeagueMount.isMounted(player.serverLevel())) {
+            ServerLevel target = LeagueTravel.leave(player);
+            source.sendSuccess(() -> Component.literal(
+                    "Returned to " + target.dimension().location() + "."), false);
+        } else {
+            ServerLevel target = LeagueTravel.enter(player);
+            source.sendSuccess(() -> Component.literal(
+                    "Travelled to " + target.dimension().location()
+                            + ". Use /league travel again to return."), false);
+        }
+        return 1;
     }
 
     private static int info(CommandContext<CommandSourceStack> context) {

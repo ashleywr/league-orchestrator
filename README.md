@@ -79,6 +79,17 @@ and leave the overworld alone.
 League towns are gated to the mounted dimension by structure placement, so a
 hub overworld never grows one.
 
+`/league travel` moves a player between the hub and the League dimension and
+back. It is the one League command available to players; everything else under
+`/league` is operator tooling and needs permission level 2. In a world without
+a League dimension it reports that rather than doing nothing.
+
+Entering lands on the League world's shared spawn, which the starter-town
+bootstrap has already validated as a safe outdoor block. Returning goes back to
+where the player left from; that point is stored in world save data rather than
+on the player, because it has to survive the death and dimension change that
+would otherwise lose it.
+
 Dimension layout and Atlas scope are both fixed when a world is created and
 cannot be changed afterwards - terrain generated under one rule and terrain
 generated under another will not meet.
