@@ -10,8 +10,8 @@ on a contract that does not yet have a renderer.
 |---|---|---|
 | Continents, regions, and profiles | Region Engine | Live |
 | Campaign selection and persistent allocations | League Orchestrator | Live |
-| Settlement-start prediction | League, using vanilla placement state | Live |
-| Third-party village generation | The third-party provider | Observed only |
+| Settlement placement | League-owned pure structure placement, consumed by Minecraft | Live, BCA pilot |
+| Third-party village generation | BCA jigsaw generation at League-approved starts | Live, BCA pilot |
 | Gym lots and native gym | League | Live |
 | RCT trainer/battle data | RCT | Live bridge |
 | Town street grammar and building ports | League content runtime | Planned |
@@ -22,9 +22,11 @@ on a contract that does not yet have a renderer.
 
 ### Server start
 
-League creates/loads `WorldLeaguePlan`, republishes saved RoadWeaver endpoints
-and routes, requeues saved eligible RCT anchors, and requests planning of the
-spawn atlas site.
+League creates/loads `WorldLeaguePlan`, preserves the shared spawn of an
+existing ledger, and—in a new ledger only—records vanilla's initial spawn as
+the reference point for a starter town. It republishes saved RoadWeaver
+endpoints and routes, requeues saved eligible RCT anchors, and requests
+planning of the spawn atlas site.
 
 ### Player-driven planning
 
@@ -33,13 +35,25 @@ is planned once. Snapshot capture happens on the server thread; pure placement
 calculation runs on a single daemon worker; its result is returned to the
 server thread and persisted.
 
-Prediction enumerates only structures in the
-`league_orchestrator:settlements` tag. It uses vanilla's structure-set
-placement state and noise-biome eligibility without generating chunks. The
-current candidate selection is deterministic but is not yet a complete copy of
-every mod's weighted structure-selection implementation; content with several
-compatible tagged structures in one set requires runtime realization as the
-final authority.
+The BCA pilot restricts `league_orchestrator:settlements` to the thirteen BCA
+village structures and replaces the runtime `minecraft:villages` placement
+with `league_orchestrator:planned_town`. The custom placement is pure
+seed/config/Atlas math, so Minecraft and League predict exactly the same BCA
+start chunk without copying BCA templates or pools. CTOV, MMV, and Qrafty towns
+are disabled in the test profile.
+
+After League saves a planned start, `TownStartPrewarmer` holds one full-chunk
+ticket at a time. Minecraft then runs its normal structure pipeline and BCA
+performs the final jigsaw validation. Only a valid realized start becomes a
+RoadWeaver endpoint. Failed BCA starts consume no endpoint; the other planned
+starts in the atlas remain the deterministic fallback set.
+
+For a new world, the nearest predicted town is moved ahead of ordinary warmup.
+Once BCA exposes its real bounds, League loads one exterior apron chunk at a
+time and uses vanilla respawn validation to find a safe block. That block
+becomes both the shared spawn and the town's RoadWeaver endpoint. The original
+vanilla spawn remains active until this succeeds; rejected starts or unusable
+aprons deterministically try the next predicted town.
 
 ### Chunk load
 
@@ -78,9 +92,11 @@ species pools. It leaves direct/manual Pokémon creation alone.
 - RCT leaders use durable `PENDING`, `VERIFYING`, `ACTIVE`, and `DEGRADED`
   state. An ambiguous spawn is degraded rather than replayed.
 - RoadWeaver is never authoritative for town discovery, campaign topology, or
-  progression. It renders selected macro edges only.
-- BCA is ARR and is never copied, overridden, or injected into. Its public
-  structure IDs can be tagged as settlement candidates when installed.
+  progression. It receives only realized town starts; a predicted BCA start is
+  not a valid RoadWeaver endpoint because RoadWeaver reserves every endpoint
+  as a structure location.
+- BCA is ARR and is never copied, overridden, or injected into. The BCA pilot
+  uses only its public registered structure IDs and its active structure set.
 
 ## Modular-town direction — planned, not yet live
 
@@ -114,6 +130,11 @@ The first planned implementation is two-level:
 RoadWeaver attaches to the saved outer gateway/apron of a town or macro module,
 not to each door. It remains useful for long procedural wilderness routes;
 curated internal paths are League-owned templates.
+
+RoadWeaver roadside villages remain disabled. Future original/permitted
+PokéCenter and shop templates use RoadWeaver's `roadside` structure type as
+service stops, never its independent `roadside_village` grammar. See
+`examples/roadweaver-service-stops`.
 
 The macro-module terrain renderer is not implemented. The first asset-support
 step is registered external structures for gyms; generic licensed NBT/jigsaw

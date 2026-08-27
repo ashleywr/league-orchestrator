@@ -26,11 +26,14 @@ unclaimed profile.
 
 ## What it may observe, but never replace
 
-The settlement tag contains optional references to BCA village structure IDs.
-When BCA is installed, League can predict and register those structures as
-ordinary towns. When it is absent, the optional references disappear cleanly.
-League does not alter BCA structure sets, templates, pools, loot, or other BCA
-data.
+The bundled Kanto BCA pilot replaces League's settlement tag with optional BCA
+village structure IDs and replaces the runtime `minecraft:villages` placement
+with League's own pure placement codec. The replacement names BCA's public
+registered structure IDs but does not copy its templates, pools, loot, or
+other assets. Minecraft remains responsible for generating the selected BCA
+jigsaw start; League registers a RoadWeaver town only after that succeeds. The
+test profile suppresses competing CTOV, MMV, and Qrafty towns. When BCA is
+absent, the optional references disappear cleanly.
 
 The same rule applies to every third-party structure provider: an integration
 may identify a public structure ID or attach a runtime fallback endpoint, but

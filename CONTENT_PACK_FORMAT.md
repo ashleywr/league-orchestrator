@@ -42,6 +42,7 @@ datapack is added.
   "seed_salt": "frontier-season-one",
   "gym_pool": "frontier_badges",
   "rct_series": "frontier_season_one",
+  "town_names": ["Alder", "Cedarfall", "Stonebridge"],
   "region_profiles": ["region_engine:johto", "region_engine:sinnoh"],
   "town_palettes": ["example:temperate_towns", "example:coastal_towns"],
   "route_profiles": ["example:main_road", "example:mountain_track"],
@@ -73,6 +74,48 @@ Moog's Structure Lib towns, CobbleFurnies decor, Mega Showdown rewards,
 CobbleDollars rewards, or SimpleTMs rewards. RCT API and RCT Mod are hard
 dependencies of League Orchestrator itself, so campaigns do not need to repeat
 them in `requires`.
+
+### Named towns and zone identity
+
+`town_names` is an optional array of display names for towns generated under a
+campaign. League selects one deterministically from the world seed, campaign
+`seed_salt`, and stable settlement ID, then persists that result with the
+world plan. Changing a datapack later therefore never renames an explored
+town. Duplicate display names are permitted; content packs that need every
+town to be uniquely named should provide a sufficiently large pool.
+
+Each saved League town is mirrored into Region Engine's generic named-place
+registry. Its stable ID is implementation-owned and must not be reconstructed
+from its visible name; use the place's `town` and `settlement` tags, or its
+resolved ID, for spawn/event integrations. A `PREDICTED` town does not appear
+in normal zone lookup. Once BCA or another generator confirms it, it becomes a
+`REALIZED` zone using the actual structure bounds plus a 48-block town fringe.
+A rejected candidate becomes
+a small `FALLBACK` `route_stop`, never a town spawn zone.
+
+### Town count belongs to the structure set
+
+The League placement accepts a semantic target in the normal Minecraft
+structure-set JSON, rather than a fixed grid spacing:
+
+```json
+"placement": {
+  "type": "league_orchestrator:planned_town",
+  "salt": 31415926,
+  "towns_per_continent": 10,
+  "minimum_separation": 16
+}
+```
+
+`towns_per_continent` is the desired number of seed-stable candidates for each
+Region Engine continental site. The placement samples only that site’s actual
+land footprint, with `minimum_separation` measured in chunks. BCA can still
+reject an individual candidate during its normal terrain/jigsaw checks, so the
+final realized count can be lower. Minecraft’s worldgen, League’s fallback
+predictor, and RoadWeaver’s regional planner all call this same pure placement
+function. Three of the requested slots are deliberately sampled from the
+continent’s inner third so the normal starter-town bootstrap has nearby,
+ordinary BCA candidates before it considers the outer settlement ring.
 
 Every non-fallback campaign must declare `rct_series` and must include the
 matching RCT series resource. League validates both `rctmod`/`rctapi` and the
@@ -250,6 +293,17 @@ from each of the middle two tiers. The physical town each gym lands in is
 still chosen independently by League's own seeded, weighted `gym_pool`
 allocation (see [DATAPACK_POLICY.md](DATAPACK_POLICY.md)) — RCT's graph
 governs when a gym will fight you, League's allocation governs where it is.
+
+`scripts/generate_gym_progression.py` generates this tier structure instead
+of hand-authoring it: point it at a directory of existing progression files
+and a target trainer count, and it regenerates only their `requiredDefeats`
+fields (every other authored field, including team data elsewhere, is left
+alone). It never talks to a running server; its output is a normal datapack
+to commit, ship, or drop into a world's own `datapacks/` folder. RCT itself
+supports picking up regenerated trainer data without a server restart —
+`RctGymLeaderBridge.reloadTrainerData` (exposed as `/league trainers reload`)
+calls RCT's own trainer reload, which reconciles already-spawned leaders
+against the refreshed graph rather than orphaning them.
 
 ## Legendary encounters
 

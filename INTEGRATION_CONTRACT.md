@@ -50,13 +50,39 @@ Reset does not bypass exact reconciliation.
 
 ## RoadWeaver bridge
 
-RoadWeaver receives only saved campaign endpoints and explicit graph edges.
-Endpoint registration and `ensureConnection(..., false)` are separate,
-coordinated provider operations; no RoadWeaver reflection runs at town-planning
-or worldgen call sites. A RoadWeaver exception disables further calls for that
-server session while League retains the graph in `WorldLeaguePlan` for a later
-restart/reconciliation. League never calls RoadWeaver's synchronous generation
-mode.
+RoadWeaver owns regional structure discovery, topology planning, terrain
+sampling, route deduplication, and road generation. League does not run a
+second atlas-wide discovery pass when RoadWeaver exposes the placement-adapter
+API. Instead, League registers a pure enumerator for
+`league_orchestrator:planned_town`; RoadWeaver applies its normal structure-set
+selection and its one regional planning pass to those candidates.
+
+The adapter runs only seed/config/Atlas math and may not read chunks, saved
+data, registries, or provider APIs. RoadWeaver's predictor mirrors Minecraft's
+weighted structure-set roll before applying its whitelist and biome filter, so
+a BCA variant is not substituted merely because it is the first configured
+structure. Minecraft/BCA remains final authority for a terrain-sensitive
+jigsaw start; League reconciles actual bounds after chunk generation.
+
+On a fresh world, RoadWeaver performs that regional pass after its server
+worker lifecycle is ready, then invokes League with its persisted BCA candidate
+set before it begins initial road generation. League may use only that callback
+to reserve and synchronously try the starter town. It must not race the pass
+with a local predictor or publish duplicate endpoints. If every BCA jigsaw
+candidate rejects, the shared spawn is left unchanged and the warning is
+explicit; no phantom town or road endpoint is recorded.
+
+When an explored predicted start chunk contains no League settlement start,
+League records the BCA rejection once and places a small survey-post marker at
+that road terminus. The marker is server-side, survives restart, and removes
+the failed candidate from starter and warmup retries. This is the route-stop
+fallback: roads may end at a deliberate piece of world fiction, never an
+unexplained absent town.
+
+For an older RoadWeaver build without the adapter API, League retains the
+realized-endpoint fallback: endpoint registration and
+`ensureConnection(..., false)` are coordinated provider operations. League
+never calls RoadWeaver's synchronous generation mode.
 
 RoadWeaver's public endpoint API does not accept a doorway, facing, custom
 clearance volume, or jigsaw socket. It is therefore a macro-route renderer,

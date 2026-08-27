@@ -9,23 +9,30 @@ League has hard runtime dependencies on Region Engine, Cobblemon, RCT API, and
 Radical Cobblemon Trainers. Every League world can therefore support trainers;
 an individual campaign may still be series-free or have no placed gyms.
 
-It does not copy or replace third-party worldgen/assets. BCA and other
-structure mods may be observed through public structure IDs, while campaign
-content is supplied by normal datapacks.
+It does not copy third-party assets. The current BCA pilot uses BCA's public
+registered village IDs and jigsaw definitions at League-owned placements while
+the `cobblemon-additions` provider is installed; it does not package BCA data
+or assets.
 
 ## Current runtime
 
-1. At server start, League opens its saved world plan, requeues saved roads and
-   eligible leaders, and predicts the atlas site containing spawn.
-2. As players enter continental atlas sites, a worker predicts tagged vanilla
-   structure starts from the actual structure-placement state. This reads no
-   terrain chunks or heightmaps.
-3. The server thread saves planned towns, gym allocations, and a deterministic
-   town-to-town route graph. It gives RoadWeaver only that graph's endpoints
-   and edges.
-4. When a relevant chunk naturally loads, League reconciles a predicted town
-   with its real structure bounding box. It queues a gym only for that already
-   realized town.
+1. A new League world records vanilla's initial spawn, then reserves the
+   nearest predicted town in that atlas as its starter town. Existing League
+   worlds retain their saved shared spawn unchanged.
+2. League's pure `planned_town` placement is the active `minecraft:villages`
+   placement. Minecraft and League therefore calculate the same BCA start
+   chunks from the seed and Region Atlas, without a terrain scan. The bundled
+   Kanto pilot requests 10 candidates per Atlas continent, with a 16-chunk
+   safety separation. Region size can change without requiring pack authors
+   to derive an unrelated global spacing value.
+3. League warms one planned start chunk at a time through Minecraft's normal
+   ticket/chunk pipeline. BCA then performs its normal final jigsaw validation.
+4. After BCA confirms a real starter town, League validates an outdoor apron
+   chunk with vanilla's respawn logic, moves the shared spawn there, and uses
+   that same apron as the first RoadWeaver endpoint. It otherwise preserves
+   vanilla spawn and tries the next predicted town. Other realized towns then
+   form the town-to-town route graph; a rejected jigsaw cannot become a
+   phantom road destination.
 5. At most one queued gym placement and one total optional-provider action are
    processed per server end tick. RCT leaders require an already-loaded anchor
    chunk and nearby player; they never force terrain generation.
@@ -48,8 +55,11 @@ accepts endpoints and connections, not building doors, port facings, or custom
 obstacle bounds. League therefore does not use it for town streets.
 
 The planned town system will own semantic building ports, aprons, and internal
-streets. RoadWeaver will connect only safe outer town gateways. See
-[ARCHITECTURE.md](ARCHITECTURE.md) for the resulting boundary.
+streets. RoadWeaver will connect only safe outer town gateways. Its built-in
+roadside-village generator stays disabled; future original/permitted PokéCenter
+and shop templates use its smaller `roadside` service-stop type instead. See
+[ARCHITECTURE.md](ARCHITECTURE.md) and
+[the service-stop template](examples/roadweaver-service-stops/README.md).
 
 To keep League authoritative for a new world, disable RoadWeaver's autonomous
 structure prediction and dynamic planning in its config. League's own bridge
