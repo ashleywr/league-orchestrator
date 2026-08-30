@@ -1,0 +1,15 @@
+{
+  "id": "example_region:example_region",
+  "mode": "procedural",
+  "seed_salt": "example-region-v1",
+  "gym_pool": "",
+  "rct_series": "example_region_league",
+  "town_names": ["Example Bay", "Example Ridge", "Example Crossing"],
+  "region_profiles": ["example_region:example_region"],
+  "town_palettes": [],
+  "route_profiles": [],
+  "encounter_profiles": [],
+  "legendary_encounters": [],
+  "trainers": [],
+  "rewards": []
+}

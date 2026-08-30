@@ -1,0 +1,17 @@
+{
+  "display_name": "Example Region",
+  "biome_pool": "example_region:biomes",
+  "terrain": {
+    "land_height": 0.06,
+    "ruggedness": 0.7,
+    "inland_water": 0.04,
+    "coast_roughness": 1.05
+  },
+  "cobblemon": {
+    "allow_species_tags": ["example_region:native"],
+    "deny_species_tags": ["example_region:structure_only"]
+  },
+  "structures": {
+    "allow": ["example_region:*"]
+  }
+}

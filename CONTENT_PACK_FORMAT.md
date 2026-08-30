@@ -5,6 +5,12 @@ datapack supplies definitions for one or more Region Engine profiles. The first
 campaign resolved for a profile is written to the world plan and is not
 replaced by later datapack reloads.
 
+For a copy-and-rename starting point, see
+[`examples/league-region-content-pack-template`](examples/league-region-content-pack-template).
+It demonstrates a neutral custom namespace, semantic Cobblemon biome-tag
+bridges, an inert Region Engine profile, and the safe site-assignment override
+step.
+
 ## Status of these contracts
 
 All definitions below are parsed and validated. Only the following are active
@@ -75,6 +81,40 @@ CobbleDollars rewards, or SimpleTMs rewards. RCT API and RCT Mod are hard
 dependencies of League Orchestrator itself, so campaigns do not need to repeat
 them in `requires`.
 
+### Settlement archetypes and gym eligibility
+
+`settlement_archetypes` is an optional campaign array that keeps a town's
+visual template separate from its League role. This is particularly useful for
+BCA: an `ice` village is not implicitly an Ice gym, and an operator can keep a
+climate-specific template out of a warm campaign entirely.
+
+```json
+"settlement_archetypes": [
+  { "structure_prefix": "bca:village/default", "gym_town": "optional" },
+  { "structure_prefix": "bca:village/ice", "gym_town": "never" },
+  {
+    "structure_prefix": "example:village/harbor",
+    "gym_town": "required",
+    "gym_archetypes": ["example:water"]
+  }
+]
+```
+
+`structure_prefix` is a public registered structure ID without its size suffix.
+It matches all of that family’s tiers, so `bca:village/ice` covers
+`ice_small`, `ice_mid`, and `ice_large`. `gym_town` is `optional` by default;
+`never` makes matching towns ordinary settlements, while `required` gives
+matching towns first claim on the finite campaign gym pool. `gym_archetypes`
+is optional. When supplied it limits that family to those exact League gym
+archetype IDs, which is how a pack deliberately matches an architectural town
+family to an elemental gym. If no eligible, unallocated archetype remains, a
+town remains an ordinary settlement rather than duplicating a badge.
+
+This controls League roles, not terrain suitability. A campaign must also put
+each structure family only in climate-appropriate structure sets and structure
+biome tags. Kanto excludes BCA ice villages from its village set and additionally
+limits their structure definition to the ice-cap biome tag.
+
 ### Named towns and zone identity
 
 `town_names` is an optional array of display names for towns generated under a
@@ -92,6 +132,82 @@ in normal zone lookup. Once BCA or another generator confirms it, it becomes a
 `REALIZED` zone using the actual structure bounds plus a 48-block town fringe.
 A rejected candidate becomes
 a small `FALLBACK` `route_stop`, never a town spawn zone.
+
+### Semantic biome tags and non-Kanto campaigns
+
+Biome tags are the compatibility boundary between generator-specific choices
+and campaign meaning. Terra Kanto deliberately keeps the actual selected
+Minecraft or Regions Unexplored biome in the registry, so F3 and ordinary mod
+features still see that biome. League's Kanto pack then adds semantic tags such
+as `#league_orchestrator:kanto_forest` and contributes them additively to
+Cobblemon's `#cobblemon:is_*` tags.
+
+A custom campaign must own equivalent tags in its own namespace rather than
+inventing a replacement “region biome.” For example,
+`#amber_coast:forest` may contain a mixture of vanilla and modded forest
+biomes, while its Cobblemon bridge adds that tag to
+`#cobblemon:is_forest` with `"replace": false`. Spawn data can then target
+`#amber_coast:forest`; a later change from one real biome to another does not
+require a Java rebuild or a full spawn-data rewrite.
+
+This makes the biome/spawn vocabulary data-driven. A wholly new Terra preset
+also needs a matching League geographic-profile bridge; the shipped bridge is
+intentionally Kanto-specific and does not infer a campaign identity from an
+arbitrary Terra terrain graph.
+
+Keep surface and underground taxonomies separate. A water-carved river through
+a forest need not become a fragmented river biome, and a mountain cave tag must
+contain real underground biome identities only. See the
+[region content-pack template](examples/league-region-content-pack-template/README.md)
+and its [cave-landmark guide](examples/league-region-content-pack-template/CAVE_LANDMARKS.md)
+for the copy-and-rename layout.
+
+### Proportional settlement layout
+
+Campaigns may add `settlement_layout`. It is the campaign-owned answer to
+"how inhabited should a continent of this size feel?" Every tunable quantity
+is a `{ "minimum", "average", "maximum" }` range. Distances scale linearly
+with the generator's reported continent diameter; settlement counts scale by
+area. The real generator still owns the coastline, rivers, caves, mountains,
+and the continent size itself—this contract adapts settlement placement to
+those choices rather than attempting to redraw terrain.
+
+```json
+"settlement_layout": {
+  "reference_continent_diameter_blocks": 20096,
+  "league_towns": { "minimum": 10, "average": 10, "maximum": 10 },
+  "town_spacing_blocks": { "minimum": 1280, "average": 2648, "maximum": 4096 },
+  "coastal_town_share_permille": { "minimum": 200, "average": 400, "maximum": 600 },
+  "local_search_radius_blocks": { "minimum": 1024, "average": 1760, "maximum": 2800 },
+  "coast_probe_distance_blocks": { "minimum": 256, "average": 448, "maximum": 640 },
+  "maximum_build_height": { "minimum": 96, "average": 104, "maximum": 120 },
+  "maximum_local_relief": { "minimum": 8, "average": 12, "maximum": 20 },
+  "inland_search_attempts": { "minimum": 4, "average": 4, "maximum": 12 },
+  "coastal_search_attempts": { "minimum": 16, "average": 32, "maximum": 64 },
+  "incidental_settlements": { "minimum": 4, "average": 8, "maximum": 12 },
+  "incidental_spacing_blocks": { "minimum": 896, "average": 1440, "maximum": 2400 },
+  "incidental_search_attempts": { "minimum": 8, "average": 16, "maximum": 32 },
+  "incidental_road_endpoint_share_permille": { "minimum": 250, "average": 500, "maximum": 750 }
+}
+```
+
+`average` is the deterministic target. `minimum` and `maximum` are hard
+placement bounds: spacing is never closer/farther than its range where a
+valid site exists, and coastal/road shares are clamped to the specified count
+range. `reference_continent_diameter_blocks` is the scale baseline, not an
+instruction to create a continent; set it to the diameter for which these
+values were authored. A generator with twice that diameter receives twice the
+search/spacing distances and roughly four times the eligible settlement
+counts, bounded by each count range.
+
+The first ten Kanto slots remain the authored 4 small / 4 mid / 2 large League
+progression. `incidental_settlements` are extra small BCA villages beyond those
+slots. They make the map feel settled without changing badge progression. Only
+the configured `incidental_road_endpoint_share_permille` becomes a RoadWeaver
+endpoint, so a hamlet does not automatically make a continent-spanning road.
+Content packs which raise `league_towns` beyond the structure-set slot coverage
+must also supply matching structure-set slots and tier data; League rejects no
+terrain merely to conceal an incomplete campaign.
 
 ### Town count belongs to the structure set
 

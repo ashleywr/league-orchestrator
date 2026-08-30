@@ -1,11 +1,12 @@
 # League Orchestrator content-pack policy
 
-Region Engine's Atlas is core, always-active worldgen. League Orchestrator's
-campaign content is deliberately a per-region datapack layer: each campaign
-declares which Region Engine profile IDs it owns, and packs can be added without
-editing a global campaign list. The bundled **Kanto Classic campaign content**
-pack owns Kanto; the built-in procedural Frontier campaign safely covers every
-unclaimed profile.
+League Orchestrator's campaign content is deliberately a per-region datapack
+layer: each campaign declares the stable profile IDs it owns, and packs can be
+added without editing a global campaign list. Region Engine supplies that
+identity when its Atlas integration is active; Terra Kanto supplies the same
+League-facing geographic identity through the Terra-compatible bridge. The
+bundled **Kanto Classic campaign content** pack owns Kanto; the built-in
+procedural Frontier campaign safely covers every unclaimed profile.
 
 ## What a campaign pack owns
 
@@ -16,7 +17,9 @@ unclaimed profile.
   author, source URL, permission/license, and required credit. Permission to
   use a map in a modpack must cover distributing its converted NBT/template
   assets.
-- Its intended Region Engine profile overrides, such as `region_engine:kanto`.
+- Its intended geographic-profile assignments, such as
+  `region_engine:kanto` where Region Engine is installed. Terra Kanto retains
+  that campaign identity without requiring Region Engine to be present.
 - One original RCT series resource under `data/rctmod/series/`, identified by
   the campaign's required `rct_series` field. Frontier is intentionally the
   sole no-series fallback; RCT itself remains a hard core dependency.
@@ -48,7 +51,9 @@ League can observe that mod's generated structure.
 - Missing optional structures, tags, species pools, trainers, or template
   providers must leave the relevant feature inactive rather than produce a
   replacement resource.
-- The core mod remains useful with only Region Engine and Cobblemon.
+- The core mod remains useful with Cobblemon and its required trainer
+  integrations; Region Engine is optional and Terra Kanto is the active
+  finite-world route.
 - Biome-mod compatibility is additive and pack-owned. League ships no
   per-biome-mod override packs; a pack author can extend
   `league_orchestrator:kanto_biomes` with their own optional datapack.
@@ -57,15 +62,16 @@ League can observe that mod's generated structure.
 
 ## Campaign selection and order
 
-Enable any number of non-overlapping campaign packs before creating a world.
-The bundled Kanto Classic pack should be above Region Engine's normal mod data
-because it supplies the Kanto profile and League definitions. A procedural or
-roguelike campaign pack declares its own profile IDs and randomized pools; any
-profile with no specialist pack resolves to Frontier.
+The bundled Kanto Classic pack is globally enabled whenever its required BCA
+provider is installed. It supplies the Kanto profile and League definitions
+without needing a per-world selection step. Additional campaign packs must be
+non-overlapping; any profile with no specialist pack resolves to Frontier.
 
-Region Engine's Atlas itself is not a selectable datapack. An external campaign
-pack may add League definitions or additive biome-tag entries, but must not
-replace generated worldgen after a world has begun.
+Neither Region Engine's Atlas nor Terra's generator configuration is a
+campaign datapack. An external campaign pack may add League definitions or
+additive biome-tag entries, but must not replace generated worldgen after a
+world has begun. Terra Kanto uses real vanilla/Regions Unexplored biome IDs;
+campaign tags classify those IDs and never replace their biome effects.
 
 The first valid campaign resolved for a profile is saved with the world plan.
 This lets a newly-added pack govern a previously untouched profile, while never
@@ -104,15 +110,19 @@ opposite handling:
   `bca:village/*`. Whichever pack loads last wins, so a League override that
   restates the vanilla list can silently reinstate plain villages.
 
-League overrides `minecraft:villages` only to apply the
+League overrides `minecraft:villages` to apply the
 `league_orchestrator:outside_league` placement, which switches villages off
 inside the mounted League dimension so the campaign's own towns are the only
-settlements there. When it does, it must **restate the active provider's
-structure list unchanged** rather than substituting vanilla structures - the
-override is about *where* villages generate, never *which* ones.
+settlements there. It normally restates the active provider's structure list
+rather than substituting vanilla structures. A regional campaign may make a
+small, explicit climate correction to that list when a provider template is
+geographically impossible for the profile; it must also constrain that
+template's structure biome tag. This remains a selection rule, not a copy of
+provider pools, templates, loot, or assets.
 
-The Kanto pack therefore carries BCA's thirteen entries and BCA's spread values
-verbatim, changing only the placement type.
+Kanto carries BCA's non-ice village families with BCA's spread values, excludes
+the ice family from its warm-region village set, and limits the retained ice
+structure definitions to Kanto's ice-cap tag as a defense in depth.
 
 Do not reach for a structure-toggle mod to suppress vanilla villages. With an
 improving mod installed there is no unaltered vanilla village to suppress, and

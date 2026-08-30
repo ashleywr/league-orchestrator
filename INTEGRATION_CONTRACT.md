@@ -50,6 +50,14 @@ Reset does not bypass exact reconciliation.
 
 ## RoadWeaver bridge
 
+For the active Terra Kanto world type, League first exposes a Terra-compatible
+geography bridge and validates bounded settlement candidates against the active
+generator. This is deliberately not an independent continent generator:
+Terra owns terrain and biome identity, while League owns campaign site roles
+and accepts only buildable locations. A failed candidate may use a bounded
+wider search or be skipped. It must never be force-placed on an invalid height,
+inside open cave air, or at a hard-coded coordinate selected for one seed.
+
 RoadWeaver owns regional structure discovery, topology planning, terrain
 sampling, route deduplication, and road generation. League does not run a
 second atlas-wide discovery pass when RoadWeaver exposes the placement-adapter
@@ -89,6 +97,20 @@ clearance volume, or jigsaw socket. It is therefore a macro-route renderer,
 not League's town-street generator. Future content must place a deterministic
 gateway/apron and give RoadWeaver only the outer gateway position; League's
 planned town grammar owns internal paths and semantic building ports.
+
+### Terra sampler and route readiness
+
+RoadWeaver must use its Terra-native terrain sampler when the active generator
+is Terra. The OpenCL density evaluator is valid only for vanilla
+`NoiseBasedChunkGenerator`; routing Terra through it would make the planned
+road disagree with the generated surface. CPU use for Terra is therefore an
+expected compatibility mode, not a recoverable GPU failure.
+
+Initial planning is complete only after RoadWeaver has either emitted its
+completion event or persisted non-empty planned routes whose recorded
+connections are all completed. A spawn-area progress value or a launcher
+process alone is not a readiness signal. This completion rule is used by the
+fresh-world benchmark workflow.
 
 ## Provider adapter rules
 

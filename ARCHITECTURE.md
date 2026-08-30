@@ -8,15 +8,16 @@ on a contract that does not yet have a renderer.
 
 | Concern | Owner | Current state |
 |---|---|---|
-| Continents, regions, and profiles | Region Engine | Live |
+| Continents, regions, and profiles | Region Engine when installed; Terra-compatible geography bridge for Terra Kanto | Live |
 | Campaign selection and persistent allocations | League Orchestrator | Live |
-| Settlement placement | League-owned pure structure placement, consumed by Minecraft | Live, BCA pilot |
+| Settlement placement | League-owned seed plan plus generator-validated Terra lowland selection, consumed by Minecraft | Live, BCA pilot |
 | Third-party village generation | BCA jigsaw generation at League-approved starts | Live, BCA pilot |
 | Gym lots and native gym | League | Live |
 | RCT trainer/battle data | RCT | Live bridge |
 | Town street grammar and building ports | League content runtime | Planned |
 | Wilderness route rendering | RoadWeaver, fed by League's graph | Live optional bridge |
-| Macro terrain-module assembly | League content runtime | Planned |
+| Kanto continent, hydrology, and landmark terrain | Terra pack + Kanto Terra Hydrology add-on | Live |
+| Macro terrain-module assembly beyond Terra Kanto | League content runtime | Planned |
 
 ## Current event flow
 

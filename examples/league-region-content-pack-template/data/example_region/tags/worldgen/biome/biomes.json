@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    { "id": "terra:replace_me/your_preset/forest", "required": false },
+    { "id": "terra:replace_me/your_preset/plains", "required": false }
+  ]
+}

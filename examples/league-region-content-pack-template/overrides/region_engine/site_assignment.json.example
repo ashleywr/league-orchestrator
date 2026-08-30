@@ -1,0 +1,6 @@
+{
+  "default_profile": "region_engine:frontier",
+  "exact_sites": [
+    { "x": 0, "z": 0, "profile": "example_region:example_region" }
+  ]
+}
