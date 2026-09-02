@@ -5,7 +5,9 @@ import com.sanhiruzu.leagueorchestrator.config.LeagueConfig;
 import com.sanhiruzu.leagueorchestrator.data.LeagueDataReloadListener;
 import com.sanhiruzu.leagueorchestrator.spawn.RegionalSpawnFilter;
 import com.sanhiruzu.leagueorchestrator.world.LeagueCommands;
+import com.sanhiruzu.leagueorchestrator.world.LeagueDimensionRegistrar;
 import com.sanhiruzu.leagueorchestrator.world.LeagueMount;
+import com.sanhiruzu.leagueorchestrator.world.LeagueSlotAssignments;
 import com.sanhiruzu.leagueorchestrator.world.LeagueWorldgen;
 import com.sanhiruzu.leagueorchestrator.world.AutoTownGymPlacement;
 import com.sanhiruzu.leagueorchestrator.world.RoadWeaverBridge;
@@ -42,11 +44,26 @@ public final class LeagueOrchestrator implements ModInitializer {
     @Override
     public void onInitialize() {
         LeagueConfig.load();
+        LeagueSlotAssignments.load();
+        LeagueDimensionRegistrar.register();
         LeagueWorldgen.bootstrap();
         RoadWeaverPlacementAdapterBridge.install();
+        // Shared across every dimension slot regardless of which region is
+        // assigned, so it is registered unconditionally rather than gated
+        // behind cobblemon-additions or a specific region's content pack.
+        ResourceManagerHelper.registerBuiltinResourcePack(
+                ResourceLocation.fromNamespaceAndPath(MOD_ID, "league_slots"),
+                FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
+                ResourcePackActivationType.ALWAYS_ENABLED
+        );
         if (FabricLoader.getInstance().isModLoaded("cobblemon-additions")) {
             ResourceManagerHelper.registerBuiltinResourcePack(
                     ResourceLocation.fromNamespaceAndPath(MOD_ID, "kanto_classic"),
+                    FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
+                    ResourcePackActivationType.ALWAYS_ENABLED
+            );
+            ResourceManagerHelper.registerBuiltinResourcePack(
+                    ResourceLocation.fromNamespaceAndPath(MOD_ID, "alola_dimension"),
                     FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
                     ResourcePackActivationType.ALWAYS_ENABLED
             );

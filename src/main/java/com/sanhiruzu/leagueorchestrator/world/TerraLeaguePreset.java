@@ -31,9 +31,11 @@ public final class TerraLeaguePreset {
             Registries.WORLD_PRESET,
             ResourceLocation.fromNamespaceAndPath("terra", "kanto/kanto")
     );
+    // Superseded by the config-driven slot pool in LeagueMount/LeagueSlotAssignments;
+    // kept working as a fallback by targeting slot 1 until the Terra pipeline is retired.
     private static final ResourceKey<LevelStem> LEAGUE_STEM = ResourceKey.create(
             Registries.LEVEL_STEM,
-            LeagueMount.LEAGUE_DIMENSION.location()
+            LeagueMount.slotDimension(1).location()
     );
 
     private TerraLeaguePreset() {

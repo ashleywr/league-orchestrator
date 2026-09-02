@@ -95,6 +95,8 @@ public final class WorldGeography {
                 disableRegionEngineProvider(exception);
             }
         }
+        ResourceLocation slotProfile = slotProfile(level);
+        if (slotProfile != null) return slotProfile;
         if (isTerraWorld(level) || usesOtgContinentApi()) return KANTO_PROFILE;
         return FRONTIER_PROFILE;
     }
@@ -109,8 +111,26 @@ public final class WorldGeography {
                 disableRegionEngineProvider(exception);
             }
         }
+        ResourceLocation slotProfile = slotProfile(level);
+        if (slotProfile != null) return slotProfile;
         if (isTerraWorld(level) || usesOtgContinentApi()) return KANTO_PROFILE;
         return FRONTIER_PROFILE;
+    }
+
+    /**
+     * The profile for a League dimension slot's currently assigned region
+     * (e.g. {@code league_orchestrator:alola}), distinct from the legacy
+     * Terra/OTG-routed {@link #KANTO_PROFILE}. Null when this level is not
+     * a slot, or its slot has no assignment.
+     */
+    private static ResourceLocation slotProfile(ServerLevel level) {
+        for (int slot = 1; slot <= LeagueMount.SLOT_COUNT; slot++) {
+            if (!LeagueMount.slotDimension(slot).equals(level.dimension())) continue;
+            String region = LeagueSlotAssignments.get().regionFor(slot);
+            return region == null || region.isBlank() ? null
+                    : ResourceLocation.fromNamespaceAndPath(LeagueOrchestrator.MOD_ID, region);
+        }
+        return null;
     }
 
     public static int cellSize() {

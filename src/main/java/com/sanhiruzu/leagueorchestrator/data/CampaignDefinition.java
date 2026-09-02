@@ -29,6 +29,10 @@ public record CampaignDefinition(
         List<SettlementArchetype> settlementArchetypes,
         /** Proportional town, coast, road-endpoint, and incidental-settlement tuning. */
         SettlementLayout settlementLayout,
+        /** Species pool id gating wild Cobblemon spawns for this campaign's region. Null allows any species. */
+        ResourceLocation wildSpeciesPool,
+        /** Species pool id allowed only via a structure/encounter, not open-world spawning. Null means none. */
+        ResourceLocation structureOnlySpeciesPool,
         /** Mods this campaign cannot run without. Missing ones make it unavailable. */
         Set<String> requiredProviders,
         /**

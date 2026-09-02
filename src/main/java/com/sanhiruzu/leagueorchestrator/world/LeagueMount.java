@@ -9,55 +9,83 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Resolves the dimension League content is mounted in.
+ * Resolves the dimensions League content is mounted in.
  *
- * <p>League generates into exactly one dimension per server. A pack played
- * solo mounts in the main world; a server may instead mount League in its own
- * dimension and keep a separate persistent overworld as its social hub. Every
- * League subsystem that needs "the League world" asks here rather than
- * assuming {@code server.overworld()}, so that choice stays in one place.
+ * <p>League generates into a config-driven pool of up to {@link #SLOT_COUNT}
+ * dimension slots ({@code league_orchestrator:league_1}..{@code league_N}),
+ * each independently assignable to a region profile by
+ * {@link LeagueSlotAssignments} and a server command. Zero or more slots may
+ * be mounted at once. A pack played solo, or a world with no slots assigned
+ * at all, falls back to mounting League in the main world instead - this is
+ * the legacy "Terra replaces the overworld" layout, kept working for older
+ * setups. Every League subsystem that needs "a League world" asks here
+ * rather than assuming {@code server.overworld()}, so that choice stays in
+ * one place.
  *
- * <p>The mount is decided by the world, not by configuration: a world created
- * with the League Dimension world type contains {@link #LEAGUE_DIMENSION} and
- * mounts there; any other world mounts in the overworld. Because the dimension
- * set is fixed when a world is created, this cannot drift, and there is no
- * config value that can disagree with the world it is running against.
+ * <p>The mounted set is decided by which slot dimensions actually exist in
+ * the world's {@link Registries#LEVEL_STEM} registry at server start - see
+ * {@link LeagueSlotAssignments} for how a slot's assigned region ends up
+ * registered there. Because that registry is rebuilt from currently-loaded
+ * data every boot, reassigning a slot and restarting is enough; no world
+ * recreation is required.
  *
  * <p>{@link WorldLeaguePlan} is per-level
  * {@link net.minecraft.world.level.saveddata.SavedData}, so a plan follows its
- * mounted dimension without migration.
+ * mounted dimension without migration, and multiple mounted slots get
+ * independent plans automatically.
  */
 public final class LeagueMount {
-    /** Dimension supplied by the {@code league_orchestrator:league_dimension} world preset. */
-    public static final ResourceKey<Level> LEAGUE_DIMENSION = ResourceKey.create(
-            Registries.DIMENSION,
-            ResourceLocation.fromNamespaceAndPath(LeagueOrchestrator.MOD_ID, "league"));
+    /** Maximum number of concurrently assignable league dimension slots. */
+    public static final int SLOT_COUNT = 5;
+
+    /** The {@code league_orchestrator:league_1}..{@code league_N} slot dimension keys, in order. */
+    private static final List<ResourceKey<Level>> SLOT_DIMENSIONS = buildSlotDimensions();
+
+    private static List<ResourceKey<Level>> buildSlotDimensions() {
+        List<ResourceKey<Level>> slots = new ArrayList<>(SLOT_COUNT);
+        for (int slot = 1; slot <= SLOT_COUNT; slot++) {
+            slots.add(ResourceKey.create(
+                    Registries.DIMENSION,
+                    ResourceLocation.fromNamespaceAndPath(LeagueOrchestrator.MOD_ID, "league_" + slot)));
+        }
+        return List.copyOf(slots);
+    }
+
+    /** The slot dimension for a 1-based slot number, e.g. {@code slotDimension(1)} is {@code league_1}. */
+    public static ResourceKey<Level> slotDimension(int slot) {
+        return SLOT_DIMENSIONS.get(slot - 1);
+    }
 
     /**
-     * Structure-generator states belonging to the mounted level. Structure
+     * Structure-generator states belonging to a mounted level. Structure
      * placement runs deep in worldgen with no idea which dimension it is
      * generating, so each level registers its own state as it loads, when the
      * dimension is known for free.
      */
     private static final Set<ChunkGeneratorStructureState> MOUNTED_STATES =
             Collections.newSetFromMap(new IdentityHashMap<>());
-    /** Generator states for the mounted level only when that level actually uses Terra. */
+    /** Generator states for mounted levels that actually use Terra. */
     private static final Set<ChunkGeneratorStructureState> TERRA_MOUNTED_STATES =
             Collections.newSetFromMap(new IdentityHashMap<>());
 
-    private static volatile ResourceKey<Level> resolved = Level.OVERWORLD;
+    /** Falls back to the overworld when no slot is mounted - the legacy layout. */
+    private static volatile Set<ResourceKey<Level>> mountedSlots = Set.of(Level.OVERWORLD);
 
     private LeagueMount() {
     }
 
     /**
-     * Settles which dimension League uses for this run. Called once at server
-     * start, before any level is classified.
+     * Settles which dimensions League uses for this run. Called once at
+     * server start, before any level is classified.
      */
     public static void resolve(MinecraftServer server) {
         MOUNTED_STATES.clear();
@@ -65,27 +93,48 @@ public final class LeagueMount {
         // SERVER_STARTING runs before levels are created, so ask the dimension
         // registry rather than the level map. The registry comes from world
         // data and is already populated here.
-        boolean hasLeagueDimension = server.registryAccess()
-                .registryOrThrow(Registries.LEVEL_STEM)
-                .containsKey(ResourceKey.create(Registries.LEVEL_STEM, LEAGUE_DIMENSION.location()));
-        resolved = hasLeagueDimension ? LEAGUE_DIMENSION : Level.OVERWORLD;
-        LeagueOrchestrator.LOGGER.info("League content is mounted in {}", resolved.location());
+        var stems = server.registryAccess().registryOrThrow(Registries.LEVEL_STEM);
+        Set<ResourceKey<Level>> mounted = new LinkedHashSet<>();
+        for (ResourceKey<Level> slot : SLOT_DIMENSIONS) {
+            if (stems.containsKey(ResourceKey.create(Registries.LEVEL_STEM, slot.location()))) {
+                mounted.add(slot);
+            }
+        }
+        mountedSlots = mounted.isEmpty() ? Set.of(Level.OVERWORLD) : Set.copyOf(mounted);
+        LeagueOrchestrator.LOGGER.info("League content is mounted in {}",
+                mountedSlots.stream().map(key -> key.location().toString()).collect(Collectors.joining(", ")));
     }
 
-    /** The level League generates and plans into. */
+    /** A level League generates and plans into. Prefer {@link #mountedLevels(MinecraftServer)} when acting on every active league. */
     public static ServerLevel level(MinecraftServer server) {
-        ServerLevel level = server.getLevel(resolved);
-        return level != null ? level : server.overworld();
+        for (ResourceKey<Level> slot : mountedSlots) {
+            ServerLevel level = server.getLevel(slot);
+            if (level != null) return level;
+        }
+        return server.overworld();
     }
 
-    /** True when this level is the mounted League dimension. */
+    /** Every currently mounted League level. */
+    public static List<ServerLevel> mountedLevels(MinecraftServer server) {
+        List<ServerLevel> levels = new ArrayList<>(mountedSlots.size());
+        for (ResourceKey<Level> slot : mountedSlots) {
+            ServerLevel level = server.getLevel(slot);
+            if (level != null) levels.add(level);
+        }
+        return levels;
+    }
+
+    /** True when this level is one of the mounted League dimensions. */
     public static boolean isMounted(ServerLevel level) {
-        return level.dimension().equals(resolved);
+        return mountedSlots.contains(level.dimension());
     }
 
-    /** True when this dimension id names the mounted League dimension. */
+    /** True when this dimension id names a mounted League dimension. */
     public static boolean isMounted(MinecraftServer server, ResourceLocation dimension) {
-        return resolved.location().equals(dimension);
+        for (ResourceKey<Level> slot : mountedSlots) {
+            if (slot.location().equals(dimension)) return true;
+        }
+        return false;
     }
 
     /** Records a level's structure state as it loads, so worldgen can be scoped. */
@@ -103,7 +152,7 @@ public final class LeagueMount {
     }
 
     /**
-     * Whether structure placement running against this state is generating the
+     * Whether structure placement running against this state is generating a
      * mounted League dimension. False for every other dimension, which is what
      * keeps League towns out of a hub overworld.
      */
@@ -126,11 +175,11 @@ public final class LeagueMount {
      *
      * <p>Terra can wrap a structure state while RoadWeaver is producing a
      * road-triggered chunk, so that legacy layout needs a conservative
-     * level-scoped fallback.  A separate Terra League dimension must not use
+     * level-scoped fallback.  A world with dedicated League slots must not use
      * that fallback: its hub overworld keeps ordinary village placement.</p>
      */
     public static boolean hasTerraOverworldMountedState() {
-        return resolved.equals(Level.OVERWORLD) && hasTerraMountedState();
+        return mountedSlots.equals(Set.of(Level.OVERWORLD)) && hasTerraMountedState();
     }
 
     /** Reports which geography provider is backing this campaign. */
@@ -145,6 +194,6 @@ public final class LeagueMount {
         MOUNTED_STATES.clear();
         TERRA_MOUNTED_STATES.clear();
         LeagueTownStructurePlacement.clearTerraCandidates();
-        resolved = Level.OVERWORLD;
+        mountedSlots = Set.of(Level.OVERWORLD);
     }
 }

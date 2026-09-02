@@ -55,24 +55,30 @@ public final class WorldLeaguePlan extends SavedData {
     private String legacyCampaignId = "";
 
     public static void ensureMountedPlan(MinecraftServer server) {
-        get(LeagueMount.level(server));
+        for (ServerLevel level : LeagueMount.mountedLevels(server)) {
+            get(level);
+        }
     }
 
     /** Reconciles League's durable town ledger into Region Engine's generic place index. */
     public static void reconcileRegionPlaces(MinecraftServer server) {
-        get(LeagueMount.level(server)).publishRegionPlaces(LeagueMount.level(server));
+        for (ServerLevel level : LeagueMount.mountedLevels(server)) {
+            get(level).publishRegionPlaces(level);
+        }
     }
 
     /** Re-publish the saved campaign graph after a restart when RoadWeaver is installed. */
     public static void reconcileRoadWeaverCampaign(MinecraftServer server) {
-        ServerLevel level = LeagueMount.level(server);
-        get(level).publishRoadWeaverCampaign(level);
+        for (ServerLevel level : LeagueMount.mountedLevels(server)) {
+            get(level).publishRoadWeaverCampaign(level);
+        }
     }
 
     /** Requeue saved gym anchors so persistent RCT leaders survive restarts and repairs. */
     public static void reconcileRctGymLeaders(MinecraftServer server) {
-        ServerLevel level = LeagueMount.level(server);
-        get(level).enqueueRctGymLeaders(level);
+        for (ServerLevel level : LeagueMount.mountedLevels(server)) {
+            get(level).enqueueRctGymLeaders(level);
+        }
     }
 
     /**
@@ -82,8 +88,9 @@ public final class WorldLeaguePlan extends SavedData {
      * names remain immutable.
      */
     public static void reconcileDeferredCampaignContent(MinecraftServer server) {
-        ServerLevel level = LeagueMount.level(server);
-        get(level).upgradeDeferredCampaignContent(level);
+        for (ServerLevel level : LeagueMount.mountedLevels(server)) {
+            get(level).upgradeDeferredCampaignContent(level);
+        }
     }
 
     /** Revisits only the newly loaded chunk; this never asks Minecraft to load terrain for an addon. */

@@ -62,11 +62,12 @@ public final class TownStartPrewarmer {
         return WorldLeaguePlan.get(level).townAt(level, town.center(), town.id()).orElse(town);
     }
 
-    /** Restarts only incomplete town starts after a server restart. */
+    /** Restarts only incomplete town starts after a server restart, for every mounted League slot. */
     public static void reconcile(MinecraftServer server) {
-        ServerLevel level = LeagueMount.level(server);
-        List<TownAnchor> towns = WorldLeaguePlan.get(level).unrealizedTowns();
-        towns.forEach(town -> enqueue(level, town));
+        for (ServerLevel level : LeagueMount.mountedLevels(server)) {
+            List<TownAnchor> towns = WorldLeaguePlan.get(level).unrealizedTowns();
+            towns.forEach(town -> enqueue(level, town));
+        }
     }
 
     /** Called once per server end tick; at most one chunk ticket is live. */

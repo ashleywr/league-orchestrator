@@ -100,8 +100,9 @@ public final class RctGymLeaderBridge {
 
         @Override
         public ProviderIntegrationCoordinator.ActionResult execute(MinecraftServer server) throws Exception {
-            ServerLevel level = LeagueMount.level(server);
-            if (!level.dimension().location().equals(intent.dimension())) return ProviderIntegrationCoordinator.ActionResult.DROP;
+            ServerLevel level = server.getLevel(net.minecraft.resources.ResourceKey.create(
+                    net.minecraft.core.registries.Registries.DIMENSION, intent.dimension()));
+            if (level == null) return ProviderIntegrationCoordinator.ActionResult.DROP;
 
             GymArchetype gym = LeagueDataReloadListener.current().gymArchetypes().get(intent.gymId());
             WorldLeaguePlan plan = WorldLeaguePlan.get(level);
@@ -190,8 +191,9 @@ public final class RctGymLeaderBridge {
 
         @Override
         public void onFailure(MinecraftServer server, Throwable throwable) {
-            ServerLevel level = LeagueMount.level(server);
-            if (!level.dimension().location().equals(intent.dimension())) return;
+            ServerLevel level = server.getLevel(net.minecraft.resources.ResourceKey.create(
+                    net.minecraft.core.registries.Registries.DIMENSION, intent.dimension()));
+            if (level == null) return;
             WorldLeaguePlan plan = WorldLeaguePlan.get(level);
             plan.townAt(level, intent.townCenter(), intent.townId())
                     .ifPresent(town -> plan.markGymLeaderDegraded(town,

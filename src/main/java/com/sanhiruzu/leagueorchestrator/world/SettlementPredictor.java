@@ -49,9 +49,14 @@ public final class SettlementPredictor {
     private static final Set<String> PENDING_SITES = new HashSet<>();
     private SettlementPredictor() {}
 
-    /** Plans the full geography site containing spawn before any exploration is needed. */
+    /** Plans the full geography site containing spawn before any exploration is needed, for every mounted League slot. */
     public static void planSpawnSite(MinecraftServer server) {
-        ServerLevel level = LeagueMount.level(server);
+        for (ServerLevel level : LeagueMount.mountedLevels(server)) {
+            planSpawnSite(level);
+        }
+    }
+
+    private static void planSpawnSite(ServerLevel level) {
         // RoadWeaver's placement adapter contributes its own regional
         // candidates, but it deliberately does not create League's durable
         // town ledger or force the first tangible settlement.  Skipping this
@@ -95,9 +100,9 @@ public final class SettlementPredictor {
 
     /** Expands the plan as players enter new geography sites; this is not a chunk or structure event. */
     public static void planPlayerSites(MinecraftServer server) {
-        ServerLevel level = LeagueMount.level(server);
         server.getPlayerList().getPlayers().forEach(player -> {
-            if (player.serverLevel() != level) return;
+            ServerLevel level = player.serverLevel();
+            if (!LeagueMount.isMounted(level)) return;
             WorldGeography.Site site = WorldGeography.siteAt(level, (int) player.getX(), (int) player.getZ());
             if (site.kind() == WorldGeography.Kind.CONTINENT) requestSite(level, site.cellX(), site.cellZ());
         });

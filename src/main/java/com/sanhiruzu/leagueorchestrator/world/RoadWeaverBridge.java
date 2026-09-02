@@ -111,10 +111,12 @@ public final class RoadWeaverBridge {
 
         @Override
         public ProviderIntegrationCoordinator.ActionResult execute(MinecraftServer server) throws Exception {
-            if (!isMounted(server, intent.dimension()) || isUnavailable() || isEndpointPublished(intent.key())) {
+            ServerLevel level = server.getLevel(net.minecraft.resources.ResourceKey.create(
+                    net.minecraft.core.registries.Registries.DIMENSION, intent.dimension()));
+            if (level == null || isUnavailable() || isEndpointPublished(intent.key())) {
                 return ProviderIntegrationCoordinator.ActionResult.DROP;
             }
-            api().register().invoke(null, LeagueMount.level(server), intent.position(), intent.label(), false);
+            api().register().invoke(null, level, intent.position(), intent.label(), false);
             markEndpointPublished(intent.key());
             return ProviderIntegrationCoordinator.ActionResult.COMPLETE;
         }
@@ -138,12 +140,14 @@ public final class RoadWeaverBridge {
 
         @Override
         public ProviderIntegrationCoordinator.ActionResult execute(MinecraftServer server) throws Exception {
-            if (!isMounted(server, intent.dimension()) || isUnavailable() || isRoutePublished(intent.key())) {
+            ServerLevel level = server.getLevel(net.minecraft.resources.ResourceKey.create(
+                    net.minecraft.core.registries.Registries.DIMENSION, intent.dimension()));
+            if (level == null || isUnavailable() || isRoutePublished(intent.key())) {
                 return ProviderIntegrationCoordinator.ActionResult.DROP;
             }
             // Do not change this to true: true invokes RoadWeaver generation
             // immediately, which would create a worldgen stall.
-            api().connect().invoke(null, LeagueMount.level(server), intent.from(), intent.to(), false);
+            api().connect().invoke(null, level, intent.from(), intent.to(), false);
             markRoutePublished(intent.key());
             LeagueOrchestrator.LOGGER.info("Queued RoadWeaver route {} from {} to {}.",
                     intent.routeId(), intent.from().toShortString(), intent.to().toShortString());
@@ -170,7 +174,9 @@ public final class RoadWeaverBridge {
         @Override
         @SuppressWarnings({"unchecked", "rawtypes"})
         public ProviderIntegrationCoordinator.ActionResult execute(MinecraftServer server) throws Exception {
-            if (!isMounted(server, intent.dimension()) || isUnavailable() || isMapRoutePublished(intent.key())) {
+            ServerLevel level = server.getLevel(net.minecraft.resources.ResourceKey.create(
+                    net.minecraft.core.registries.Registries.DIMENSION, intent.dimension()));
+            if (level == null || isUnavailable() || isMapRoutePublished(intent.key())) {
                 return ProviderIntegrationCoordinator.ActionResult.DROP;
             }
             ApiMethods methods = api();
@@ -178,7 +184,7 @@ public final class RoadWeaverBridge {
                 return ProviderIntegrationCoordinator.ActionResult.DROP;
             }
             Object routeClass = Enum.valueOf((Class<? extends Enum>) methods.mapRouteClass().asSubclass(Enum.class), intent.routeClass());
-            methods.mapRoute().invoke(null, LeagueMount.level(server), intent.from(), intent.to(), routeClass, intent.routeId());
+            methods.mapRoute().invoke(null, level, intent.from(), intent.to(), routeClass, intent.routeId());
             markMapRoutePublished(intent.key());
             return ProviderIntegrationCoordinator.ActionResult.COMPLETE;
         }
@@ -225,10 +231,6 @@ public final class RoadWeaverBridge {
 
     private static boolean isMounted(ServerLevel level) {
         return LeagueMount.isMounted(level);
-    }
-
-    private static boolean isMounted(MinecraftServer server, ResourceLocation dimension) {
-        return LeagueMount.isMounted(server, dimension);
     }
 
     private static BlockPos townEndpoint(TownAnchor town) { return horizontal(town.routeEndpoint()); }

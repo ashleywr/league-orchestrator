@@ -1,0 +1,11 @@
+{
+  "replace": true,
+  "values": [
+    "league_orchestrator:league",
+    "league_orchestrator:league_1",
+    "league_orchestrator:league_2",
+    "league_orchestrator:league_3",
+    "league_orchestrator:league_4",
+    "league_orchestrator:league_5"
+  ]
+}

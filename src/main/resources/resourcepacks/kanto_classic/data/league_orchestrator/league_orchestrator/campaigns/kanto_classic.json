@@ -50,8 +50,11 @@
     "simpletms"
   ],
   "region_profiles": [
-    "region_engine:kanto"
+    "region_engine:kanto",
+    "league_orchestrator:kanto"
   ],
+  "wild_species_pool": "league_orchestrator:kanto_native",
+  "structure_only_species_pool": "league_orchestrator:kanto_structure_only",
   "town_palettes": [],
   "route_profiles": [],
   "encounter_profiles": [],

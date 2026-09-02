@@ -1,8 +1,10 @@
 package com.sanhiruzu.leagueorchestrator.world;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.sanhiruzu.leagueorchestrator.LeagueOrchestrator;
 import com.sanhiruzu.leagueorchestrator.data.GymArchetype;
 import com.sanhiruzu.leagueorchestrator.data.LeagueDataReloadListener;
 import com.sanhiruzu.leagueorchestrator.provider.ProviderRegistry;
@@ -13,13 +15,22 @@ import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.LevelResource;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** Minimal operator diagnostics while authored gym-site placement is added. */
 public final class LeagueCommands {
@@ -68,7 +79,15 @@ public final class LeagueCommands {
                         .then(Commands.literal("place")
                                 .then(Commands.argument("id", StringArgumentType.word())
                                         .then(Commands.argument("pool", StringArgumentType.word())
-                                                .executes(LeagueCommands::placeTownGym))))));
+                                                .executes(LeagueCommands::placeTownGym)))))
+                .then(Commands.literal("slot")
+                        .requires(source -> source.hasPermission(2))
+                        .then(Commands.argument("slot", IntegerArgumentType.integer(1, LeagueMount.SLOT_COUNT))
+                                .then(Commands.literal("assign")
+                                        .then(Commands.argument("region", StringArgumentType.word())
+                                                .executes(LeagueCommands::assignSlot)))
+                                .then(Commands.literal("clear").executes(LeagueCommands::clearSlot))
+                                .then(Commands.literal("wipe").executes(LeagueCommands::wipeSlot)))));
     }
 
     private static int travel(CommandContext<CommandSourceStack> context)
@@ -312,6 +331,76 @@ public final class LeagueCommands {
         if (gym != null) RctGymLeaderBridge.enqueue(player.serverLevel(), reset.get(), gym);
         context.getSource().sendSuccess(() -> Component.literal("Reset leader state for '" + townId
                 + "'. League will reconcile an exact RCT trainer before any new spawn."), true);
+        return 1;
+    }
+
+    /**
+     * Assigns a region profile to a dimension slot. Only writes the
+     * assignment - the actual dimension registry only picks it up on the
+     * next server restart, since worldgen registries are not reloadable.
+     */
+    private static int assignSlot(CommandContext<CommandSourceStack> context) {
+        int slot = IntegerArgumentType.getInteger(context, "slot");
+        String region = StringArgumentType.getString(context, "region");
+        if (!LeagueDimensionRegistrar.KNOWN_REGIONS.contains(region)) {
+            context.getSource().sendFailure(Component.literal("Unknown region profile '" + region
+                    + "'. Available: " + String.join(", ", LeagueDimensionRegistrar.KNOWN_REGIONS)));
+            return 0;
+        }
+        LeagueSlotAssignments.assign(slot, region);
+        context.getSource().sendSuccess(() -> Component.literal("Slot " + slot + " will generate as '" + region
+                + "' after the next server restart. If the slot currently holds different terrain, run "
+                + "/league slot " + slot + " clear, restart, /league slot " + slot + " wipe, "
+                + "then assign this region and restart again."), true);
+        return 1;
+    }
+
+    /** Unassigns a dimension slot. Takes effect - the slot stops existing - after the next restart. */
+    private static int clearSlot(CommandContext<CommandSourceStack> context) {
+        int slot = IntegerArgumentType.getInteger(context, "slot");
+        LeagueSlotAssignments.clear(slot);
+        context.getSource().sendSuccess(() -> Component.literal(
+                "Slot " + slot + " will be unassigned after the next server restart."), true);
+        return 1;
+    }
+
+    /**
+     * Deletes a slot's on-disk region files, so its next assignment
+     * regenerates fresh terrain instead of reusing old chunks under a new
+     * biome set. Refuses while the slot is still mounted, since a live
+     * ServerLevel holds those files open.
+     */
+    private static int wipeSlot(CommandContext<CommandSourceStack> context) {
+        int slot = IntegerArgumentType.getInteger(context, "slot");
+        MinecraftServer server = context.getSource().getServer();
+        ResourceKey<Level> dimension = LeagueMount.slotDimension(slot);
+        if (LeagueMount.isMounted(server, dimension.location())) {
+            context.getSource().sendFailure(Component.literal("Slot " + slot
+                    + " is currently mounted; run /league slot " + slot
+                    + " clear and restart before wiping it."));
+            return 0;
+        }
+        Path path = server.getWorldPath(LevelResource.ROOT).resolve("dimensions")
+                .resolve(dimension.location().getNamespace()).resolve(dimension.location().getPath());
+        if (!Files.exists(path)) {
+            context.getSource().sendSuccess(() -> Component.literal(
+                    "Slot " + slot + " has no terrain on disk to wipe."), true);
+            return 1;
+        }
+        try (Stream<Path> walk = Files.walk(path)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(entry -> {
+                try {
+                    Files.delete(entry);
+                } catch (IOException exception) {
+                    LeagueOrchestrator.LOGGER.error("Could not delete {}", entry, exception);
+                }
+            });
+        } catch (IOException exception) {
+            context.getSource().sendFailure(Component.literal("Could not wipe slot " + slot + ": " + exception.getMessage()));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal(
+                "Wiped slot " + slot + "'s terrain. Assign a region and restart to regenerate it."), true);
         return 1;
     }
 }

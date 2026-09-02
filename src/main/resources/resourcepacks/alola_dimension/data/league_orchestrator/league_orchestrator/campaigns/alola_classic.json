@@ -1,0 +1,59 @@
+{
+  "id": "league_orchestrator:alola_classic",
+  "mode": "fixed",
+  "seed_salt": "alola-classic-v1",
+  "gym_pool": "alola_trials",
+  "rct_series": "league_orchestrator_alola",
+  "town_names": [
+    "Iki Town",
+    "Hau'oli City",
+    "Heahea City",
+    "Paniola Town",
+    "Konikoni City",
+    "Malie City",
+    "Tapu Village",
+    "Seafolk Village",
+    "Po Town"
+  ],
+  "settlement_archetypes": [
+    { "structure_prefix": "bca:village/default", "gym_town": "optional" },
+    { "structure_prefix": "bca:village/fairy", "gym_town": "optional" },
+    { "structure_prefix": "bca:village/fighting", "gym_town": "optional" }
+  ],
+  "settlement_layout": {
+    "reference_continent_diameter_blocks": 20096,
+    "league_towns": { "minimum": 8, "average": 9, "maximum": 9 },
+    "town_spacing_blocks": { "minimum": 960, "average": 2048, "maximum": 3200 },
+    "coastal_town_share_permille": { "minimum": 500, "average": 700, "maximum": 900 },
+    "local_search_radius_blocks": { "minimum": 1024, "average": 1760, "maximum": 2800 },
+    "coast_probe_distance_blocks": { "minimum": 256, "average": 448, "maximum": 640 },
+    "maximum_build_height": { "minimum": 96, "average": 104, "maximum": 120 },
+    "maximum_local_relief": { "minimum": 8, "average": 12, "maximum": 20 },
+    "maximum_town_terracing_relief": { "minimum": 20, "average": 32, "maximum": 48 },
+    "inland_search_attempts": { "minimum": 4, "average": 4, "maximum": 12 },
+    "coastal_search_attempts": { "minimum": 16, "average": 32, "maximum": 64 },
+    "incidental_settlements": { "minimum": 4, "average": 8, "maximum": 12 },
+    "incidental_spacing_blocks": { "minimum": 896, "average": 1440, "maximum": 2400 },
+    "incidental_search_attempts": { "minimum": 8, "average": 16, "maximum": 32 },
+    "incidental_road_endpoint_share_permille": { "minimum": 250, "average": 500, "maximum": 750 }
+  },
+  "requires": [
+    "cobblemon-additions"
+  ],
+  "recommends": [
+    "roadweaver",
+    "cobbledollars",
+    "simpletms"
+  ],
+  "region_profiles": [
+    "league_orchestrator:alola"
+  ],
+  "wild_species_pool": "league_orchestrator:alola_native",
+  "structure_only_species_pool": "league_orchestrator:alola_structure_only",
+  "town_palettes": [],
+  "route_profiles": [],
+  "encounter_profiles": [],
+  "legendary_encounters": [],
+  "trainers": [],
+  "rewards": []
+}

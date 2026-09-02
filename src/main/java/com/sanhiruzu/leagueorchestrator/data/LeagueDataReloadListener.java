@@ -136,6 +136,8 @@ public final class LeagueDataReloadListener implements SimpleSynchronousResource
                     settlementArchetypes(root.getAsJsonArray("settlement_archetypes")),
                     SettlementLayout.fromJson(root.has("settlement_layout")
                             ? root.getAsJsonObject("settlement_layout") : null),
+                    optionalId(root, "wild_species_pool"),
+                    optionalId(root, "structure_only_species_pool"),
                     requirements,
                     recommendations
             ));
@@ -318,6 +320,11 @@ public final class LeagueDataReloadListener implements SimpleSynchronousResource
 
     private static ResourceLocation id(JsonObject object, String key, ResourceLocation fallback) {
         return object.has(key) ? ResourceLocation.parse(object.get(key).getAsString()) : fallback;
+    }
+
+    private static ResourceLocation optionalId(JsonObject object, String key) {
+        return object.has(key) && !object.get(key).getAsString().isBlank()
+                ? ResourceLocation.parse(object.get(key).getAsString()) : null;
     }
 
     private static ResourceLocation requiredId(JsonObject object, String key) {

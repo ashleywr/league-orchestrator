@@ -33,9 +33,14 @@ public final class StarterTownBootstrap {
 
     private StarterTownBootstrap() {}
 
-    /** Called before the first prediction, preserving all existing world spawns. */
+    /** Called before the first prediction, preserving all existing world spawns, for every mounted League slot. */
     public static void begin(MinecraftServer server) {
-        ServerLevel level = LeagueMount.level(server);
+        for (ServerLevel level : LeagueMount.mountedLevels(server)) {
+            begin(level);
+        }
+    }
+
+    private static void begin(ServerLevel level) {
         // This is deliberately independent of RoadWeaver's initial scan.
         // Its planner only samples generator base heights, so it loads no
         // chunks and remains safe during server startup.
