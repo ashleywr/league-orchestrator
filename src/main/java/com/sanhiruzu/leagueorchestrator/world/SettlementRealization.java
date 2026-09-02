@@ -23,9 +23,11 @@ public final class SettlementRealization {
                 .anyMatch(entry -> isSettlementStart(structures, entry.getKey(), entry.getValue()));
         chunk.getAllStarts().forEach((structure, start) -> realizeStart(level, structures, structure, start));
         if (!hasSettlementStart) {
-            WorldLeaguePlan.get(level).pendingTownStartsInChunk(chunk.getPos().x, chunk.getPos().z).forEach(town -> {
-                if (RoadsideStopFallback.create(level, town)) StarterTownBootstrap.onTownRejected(level, town);
-            });
+            // This event is raised during the chunk upgrade itself.  The
+            // rejection path must remain non-loading; any optional marker is
+            // deferred by StarterTownBootstrap.
+            WorldLeaguePlan.get(level).pendingTownStartsInChunk(chunk.getPos().x, chunk.getPos().z)
+                    .forEach(town -> StarterTownBootstrap.onTownRejected(level, town));
         }
     }
 

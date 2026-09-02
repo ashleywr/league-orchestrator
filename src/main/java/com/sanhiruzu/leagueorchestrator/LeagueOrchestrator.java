@@ -9,6 +9,7 @@ import com.sanhiruzu.leagueorchestrator.world.LeagueMount;
 import com.sanhiruzu.leagueorchestrator.world.LeagueWorldgen;
 import com.sanhiruzu.leagueorchestrator.world.AutoTownGymPlacement;
 import com.sanhiruzu.leagueorchestrator.world.RoadWeaverBridge;
+import com.sanhiruzu.leagueorchestrator.world.RoadsideStopFallback;
 import com.sanhiruzu.leagueorchestrator.world.RoadWeaverPlacementAdapterBridge;
 import com.sanhiruzu.leagueorchestrator.world.RctGymLeaderBridge;
 import com.sanhiruzu.leagueorchestrator.world.SettlementPredictor;
@@ -93,6 +94,7 @@ public final class LeagueOrchestrator implements ModInitializer {
             SettlementPredictor.stop();
             TownStartPrewarmer.stop();
             StarterTownBootstrap.stop();
+            RoadsideStopFallback.stop();
             RoadWeaverBridge.stop();
             RctGymLeaderBridge.stop();
         });
@@ -107,6 +109,7 @@ public final class LeagueOrchestrator implements ModInitializer {
             SettlementPredictor.planPlayerSites(server);
             TownStartPrewarmer.tick(server);
             StarterTownBootstrap.tick(server);
+            RoadsideStopFallback.tick(server);
             AutoTownGymPlacement.tick(server);
             RctGymLeaderBridge.tick(server);
         });

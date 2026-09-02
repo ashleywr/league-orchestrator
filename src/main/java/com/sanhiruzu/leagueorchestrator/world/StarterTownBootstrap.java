@@ -122,7 +122,7 @@ public final class StarterTownBootstrap {
     /** Lets the prewarmer move to the next deterministic candidate if BCA rejects a start. */
     public static void onTownRejected(ServerLevel level, TownAnchor town) {
         WorldLeaguePlan plan = WorldLeaguePlan.get(level);
-        RoadsideStopFallback.create(level, town);
+        RoadsideStopFallback.defer(level, town);
         if (plan.rejectStarterTown(town)) considerPlannedTowns(level);
     }
 

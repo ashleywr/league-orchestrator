@@ -3,9 +3,9 @@ package com.sanhiruzu.leagueorchestrator.world;
 import com.sanhiruzu.leagueorchestrator.LeagueOrchestrator;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 import java.util.ArrayDeque;
 import java.util.HashSet;
@@ -86,9 +86,10 @@ public final class TownStartPrewarmer {
         }
 
         ChunkPos start = new ChunkPos(town.center());
-        // A distance-zero region ticket asks the server chunk pipeline for one
-        // full chunk without synchronously calling getChunk on the tick thread.
-        request.level().getChunkSource().addRegionTicket(TicketType.UNKNOWN, start, 0, start);
+        // Ask the normal asynchronous pipeline for one FULL chunk. A bare
+        // region ticket can remain pending on C2ME without requesting status
+        // upgrade; never replace this with synchronous level.getChunk here.
+        request.level().getChunkSource().getChunkFuture(start.x, start.z, ChunkStatus.FULL, true);
         active = new ActiveRequest(request, start, ticks + REQUEST_TIMEOUT_TICKS);
     }
 
@@ -131,7 +132,8 @@ public final class TownStartPrewarmer {
     }
 
     private static void release(ActiveRequest request) {
-        request.request().level().getChunkSource().removeRegionTicket(TicketType.UNKNOWN, request.start(), 0, request.start());
+        // getChunkFuture owns its short-lived request; there is no custom
+        // ticket to revoke or accidentally retain after a rejected start.
         KEYS.remove(request.request().key());
     }
 
