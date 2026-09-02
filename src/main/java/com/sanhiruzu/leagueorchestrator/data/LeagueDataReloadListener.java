@@ -133,6 +133,9 @@ public final class LeagueDataReloadListener implements SimpleSynchronousResource
                     resourceLocations(root.getAsJsonArray("legendary_encounters")),
                     resourceLocations(root.getAsJsonArray("trainers")),
                     resourceLocations(root.getAsJsonArray("rewards")),
+                    settlementArchetypes(root.getAsJsonArray("settlement_archetypes")),
+                    SettlementLayout.fromJson(root.has("settlement_layout")
+                            ? root.getAsJsonObject("settlement_layout") : null),
                     requirements,
                     recommendations
             ));
@@ -369,5 +372,25 @@ public final class LeagueDataReloadListener implements SimpleSynchronousResource
             }
         }
         return Set.copyOf(values);
+    }
+
+    private static List<SettlementArchetype> settlementArchetypes(JsonArray array) {
+        if (array == null) return List.of();
+        List<SettlementArchetype> archetypes = new java.util.ArrayList<>();
+        Set<String> prefixes = new HashSet<>();
+        for (JsonElement element : array) {
+            if (!element.isJsonObject()) throw new IllegalArgumentException("settlement_archetypes entries must be objects");
+            JsonObject object = element.getAsJsonObject();
+            String prefix = requiredString(object, "structure_prefix");
+            if (!prefixes.add(prefix)) throw new IllegalArgumentException("Duplicate settlement structure_prefix '" + prefix + "'");
+            archetypes.add(new SettlementArchetype(prefix,
+                    SettlementArchetype.GymTownMode.parse(optionalString(object, "gym_town", "optional")),
+                    resourceLocationSet(object.getAsJsonArray("gym_archetypes"))));
+        }
+        // A more specific template family wins, e.g. a future
+        // bca:village/ice_large rule over bca:village/ice.
+        archetypes.sort(java.util.Comparator.comparingInt((SettlementArchetype value) -> value.structurePrefix().length()).reversed()
+                .thenComparing(SettlementArchetype::structurePrefix));
+        return List.copyOf(archetypes);
     }
 }

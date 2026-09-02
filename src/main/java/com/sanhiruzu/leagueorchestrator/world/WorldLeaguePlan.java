@@ -2,14 +2,9 @@ package com.sanhiruzu.leagueorchestrator.world;
 
 import com.sanhiruzu.leagueorchestrator.LeagueOrchestrator;
 import com.sanhiruzu.leagueorchestrator.data.GymArchetype;
+import com.sanhiruzu.leagueorchestrator.data.SettlementArchetype;
 import com.sanhiruzu.leagueorchestrator.data.CampaignDefinition;
 import com.sanhiruzu.leagueorchestrator.data.LeagueDataReloadListener;
-import com.sanhiruzu.regionengine.policy.RegionPolicyService;
-import com.sanhiruzu.regionengine.world.atlas.AtlasRegion;
-import com.sanhiruzu.regionengine.place.PlaceBounds;
-import com.sanhiruzu.regionengine.place.PlaceState;
-import com.sanhiruzu.regionengine.place.RegionPlace;
-import com.sanhiruzu.regionengine.place.RegionPlaceService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.nbt.CompoundTag;
@@ -39,8 +34,6 @@ import java.util.Set;
 public final class WorldLeaguePlan extends SavedData {
     private static final String DATA_ID = "league_orchestrator_world_plan";
     private static final Factory<WorldLeaguePlan> FACTORY = new Factory<>(WorldLeaguePlan::new, WorldLeaguePlan::load, null);
-    /** The semantic town fringe around a physically observed structure footprint. */
-    private static final int TOWN_ZONE_FRINGE_BLOCKS = 48;
 
     private final Map<String, String> allocations = new HashMap<>();
     private final Map<String, TownAnchor> towns = new HashMap<>();
@@ -109,7 +102,7 @@ public final class WorldLeaguePlan extends SavedData {
      * untouched region without changing a profile that players have visited.
      */
     public synchronized Optional<CampaignDefinition> campaignFor(ServerLevel level, BlockPos position) {
-        ResourceLocation profileId = RegionPolicyService.profileAt(level, position.getX(), position.getZ()).id();
+        ResourceLocation profileId = WorldGeography.profileAt(level, position.getX(), position.getZ());
         var data = LeagueDataReloadListener.current();
         Optional<CampaignDefinition> exact = data.exactCampaignForProfile(profileId);
         String stored = campaignsByProfile.get(profileId.toString());
@@ -149,13 +142,19 @@ public final class WorldLeaguePlan extends SavedData {
     /** The RCT series chosen with this profile's campaign, if the campaign uses RCT. */
     public synchronized Optional<String> rctSeriesIdFor(ServerLevel level, BlockPos position) {
         campaignFor(level, position);
-        ResourceLocation profileId = RegionPolicyService.profileAt(level, position.getX(), position.getZ()).id();
+        ResourceLocation profileId = WorldGeography.profileAt(level, position.getX(), position.getZ());
         return Optional.ofNullable(rctSeriesByProfile.get(profileId.toString()));
     }
 
     public synchronized Optional<GymArchetype> allocate(ServerLevel level, BlockPos position, String slot, String pool) {
-        AtlasRegion atlas = RegionPolicyService.atlasRegionAt(level.getSeed(), position.getX(), position.getZ());
-        if (atlas.kind() == AtlasRegion.Kind.OCEAN) {
+        return allocate(level, position, slot, pool, Set.of());
+    }
+
+    /** Allocates from a campaign pool, optionally narrowed by a town-template rule. */
+    private synchronized Optional<GymArchetype> allocate(ServerLevel level, BlockPos position, String slot, String pool,
+                                                          Set<ResourceLocation> permittedGymArchetypes) {
+        WorldGeography.Site atlas = WorldGeography.siteAt(level, position.getX(), position.getZ());
+        if (atlas.kind() == WorldGeography.Kind.OCEAN) {
             return Optional.empty();
         }
 
@@ -167,8 +166,11 @@ public final class WorldLeaguePlan extends SavedData {
                     .get(net.minecraft.resources.ResourceLocation.tryParse(existing)));
         }
 
-        String profileId = RegionPolicyService.profileForSite(level.getSeed(), atlas.cellX(), atlas.cellZ()).id().toString();
+        String profileId = WorldGeography.profileForSite(level, level.getSeed(), atlas.cellX(), atlas.cellZ()).toString();
         List<GymArchetype> candidates = new ArrayList<>(LeagueDataReloadListener.current().gymsInPool(pool, profileId));
+        if (!permittedGymArchetypes.isEmpty()) {
+            candidates.removeIf(gym -> !permittedGymArchetypes.contains(gym.id()));
+        }
         // Pools deplete within an atlas site. Kanto can therefore have one of
         // each selected gym across its towns, while a future Johto profile can
         // intentionally reuse the same archetype from its own local pool.
@@ -184,13 +186,13 @@ public final class WorldLeaguePlan extends SavedData {
     }
 
     public synchronized Optional<String> allocationAt(ServerLevel level, BlockPos position, String slot) {
-        AtlasRegion atlas = RegionPolicyService.atlasRegionAt(level.getSeed(), position.getX(), position.getZ());
+        WorldGeography.Site atlas = WorldGeography.siteAt(level, position.getX(), position.getZ());
         return Optional.ofNullable(allocations.get(atlas.cellX() + "," + atlas.cellZ() + "|" + slot));
     }
 
     public synchronized Optional<TownAnchor> registerTown(ServerLevel level, BlockPos center, String townId) {
-        AtlasRegion atlas = RegionPolicyService.atlasRegionAt(level.getSeed(), center.getX(), center.getZ());
-        if (atlas.kind() != AtlasRegion.Kind.CONTINENT) return Optional.empty();
+        WorldGeography.Site atlas = WorldGeography.siteAt(level, center.getX(), center.getZ());
+        if (atlas.kind() != WorldGeography.Kind.CONTINENT) return Optional.empty();
         String key = townKey(atlas.cellX(), atlas.cellZ(), townId);
         TownAnchor existing = towns.get(key);
         if (existing != null) return Optional.of(existing);
@@ -199,18 +201,18 @@ public final class WorldLeaguePlan extends SavedData {
                 null, null, GymLeaderState.UNASSIGNED, "", townName(level, townId, center));
         towns.put(key, town);
         setDirty();
-        publishRegionPlace(level, town, PlaceState.PREDICTED, null);
+        publishRegionPlace(level, town, false, false);
         RoadWeaverBridge.publishTown(level, town);
         return Optional.of(town);
     }
 
     public synchronized Optional<TownAnchor> townAt(ServerLevel level, BlockPos position, String townId) {
-        AtlasRegion atlas = RegionPolicyService.atlasRegionAt(level.getSeed(), position.getX(), position.getZ());
+        WorldGeography.Site atlas = WorldGeography.siteAt(level, position.getX(), position.getZ());
         return Optional.ofNullable(towns.get(townKey(atlas.cellX(), atlas.cellZ(), townId)));
     }
 
     public synchronized Optional<TownAnchor> nearestTown(ServerLevel level, BlockPos position, double maximumDistance) {
-        AtlasRegion atlas = RegionPolicyService.atlasRegionAt(level.getSeed(), position.getX(), position.getZ());
+        WorldGeography.Site atlas = WorldGeography.siteAt(level, position.getX(), position.getZ());
         double maximumDistanceSquared = maximumDistance * maximumDistance;
         return towns.values().stream()
                 .filter(town -> town.siteX() == atlas.cellX() && town.siteZ() == atlas.cellZ())
@@ -241,7 +243,7 @@ public final class WorldLeaguePlan extends SavedData {
         if (!starterInitialized || starterOrigin == null || starterSpawn != null) return Optional.empty();
         if (!starterTownKey.isBlank()) return Optional.ofNullable(towns.get(starterTownKey));
 
-        AtlasRegion originSite = RegionPolicyService.atlasRegionAt(level.getSeed(), starterOrigin.getX(), starterOrigin.getZ());
+        WorldGeography.Site originSite = WorldGeography.siteAt(level, starterOrigin.getX(), starterOrigin.getZ());
         Optional<Map.Entry<String, TownAnchor>> selected = towns.entrySet().stream()
                 .filter(entry -> entry.getValue().siteX() == originSite.cellX() && entry.getValue().siteZ() == originSite.cellZ())
                 .filter(entry -> !roadsideStops.containsKey(entry.getKey()))
@@ -256,6 +258,12 @@ public final class WorldLeaguePlan extends SavedData {
 
     public synchronized boolean isStarterSpawnPending(TownAnchor town) {
         return starterInitialized && starterSpawn == null && starterTownKey.equals(townKey(town.siteX(), town.siteZ(), town.id()));
+    }
+
+    /** True for the durable campaign starter, including after its spawn apron is complete. */
+    public synchronized boolean isStarterTown(TownAnchor town) {
+        return town != null && !starterTownKey.isBlank()
+                && starterTownKey.equals(townKey(town.siteX(), town.siteZ(), town.id()));
     }
 
     /** Gives a rejected BCA candidate no further starter priority, then permits a deterministic fallback. */
@@ -285,8 +293,8 @@ public final class WorldLeaguePlan extends SavedData {
 
     /** Records a deterministic structure-start prediction without loading a chunk or consulting a heightmap. */
     public synchronized Optional<TownAnchor> planSettlement(ServerLevel level, ResourceLocation structure, BlockPos predictedStart) {
-        AtlasRegion atlas = RegionPolicyService.atlasRegionAt(level.getSeed(), predictedStart.getX(), predictedStart.getZ());
-        if (atlas.kind() != AtlasRegion.Kind.CONTINENT) return Optional.empty();
+        WorldGeography.Site atlas = WorldGeography.siteAt(level, predictedStart.getX(), predictedStart.getZ());
+        if (atlas.kind() != WorldGeography.Kind.CONTINENT) return Optional.empty();
         String townId = settlementId(structure, new net.minecraft.world.level.ChunkPos(predictedStart));
         String key = townKey(atlas.cellX(), atlas.cellZ(), townId);
         TownAnchor existing = towns.get(key);
@@ -298,7 +306,7 @@ public final class WorldLeaguePlan extends SavedData {
                 GymLeaderState.UNASSIGNED, "", townName(level, townId, predictedStart));
         towns.put(key, town);
         setDirty();
-        publishRegionPlace(level, town, PlaceState.PREDICTED, null);
+        publishRegionPlace(level, town, false, false);
         return Optional.of(town);
     }
 
@@ -315,7 +323,7 @@ public final class WorldLeaguePlan extends SavedData {
         int centerX = (bounds.minX() + bounds.maxX()) / 2;
         int centerY = (bounds.minY() + bounds.maxY()) / 2;
         int centerZ = (bounds.minZ() + bounds.maxZ()) / 2;
-        AtlasRegion atlas = RegionPolicyService.atlasRegionAt(level.getSeed(), centerX, centerZ);
+        WorldGeography.Site atlas = WorldGeography.siteAt(level, centerX, centerZ);
         TownAnchor existing = towns.get(townKey(atlas.cellX(), atlas.cellZ(), townId));
         if (existing != null && existing.bounds() != null) return Optional.of(existing);
 
@@ -327,7 +335,7 @@ public final class WorldLeaguePlan extends SavedData {
         towns.put(townKey(realized.siteX(), realized.siteZ(), realized.id()), realized);
         setDirty();
         ensureSiteRoadGraph(realized.siteX(), realized.siteZ());
-        publishRegionPlace(level, realized, PlaceState.REALIZED, null);
+        publishRegionPlace(level, realized, true, false);
         publishRoadWeaverCampaign(level);
         return Optional.of(realized);
     }
@@ -354,7 +362,7 @@ public final class WorldLeaguePlan extends SavedData {
         if (!towns.containsKey(key) || roadsideStops.containsKey(key)) return false;
         roadsideStops.put(key, marker.immutable());
         setDirty();
-        publishRegionPlace(level, town, PlaceState.FALLBACK, marker);
+        publishRegionPlace(level, town, false, true);
         return true;
     }
 
@@ -398,7 +406,30 @@ public final class WorldLeaguePlan extends SavedData {
     }
 
     public synchronized Optional<GymArchetype> gymForTown(ServerLevel level, TownAnchor town, String pool) {
-        return allocate(level, town.center(), "town:" + town.id(), pool);
+        Optional<CampaignDefinition> campaign = campaignFor(level, town.center());
+        Optional<SettlementArchetype> templateRule = campaign
+                .flatMap(value -> value.settlementArchetypes().stream()
+                        .filter(rule -> rule.matchesTownId(town.id()))
+                        .findFirst());
+        if (templateRule.map(SettlementArchetype::gymTownMode)
+                .filter(mode -> mode == SettlementArchetype.GymTownMode.NEVER).isPresent()) {
+            return Optional.empty();
+        }
+        Set<ResourceLocation> permitted = templateRule.map(SettlementArchetype::permittedGymArchetypes).orElse(Set.of());
+        return allocate(level, town.center(), "town:" + town.id(), pool, permitted);
+    }
+
+    /** Required archetypes are allocated first; optional towns fill remaining badges. */
+    public synchronized int gymTownPriority(ServerLevel level, TownAnchor town) {
+        return campaignFor(level, town.center())
+                .flatMap(campaign -> campaign.settlementArchetypes().stream()
+                        .filter(rule -> rule.matchesTownId(town.id()))
+                        .findFirst())
+                .map(rule -> switch (rule.gymTownMode()) {
+                    case REQUIRED -> 2;
+                    case OPTIONAL -> 1;
+                    case NEVER -> 0;
+                }).orElse(1);
     }
 
     public synchronized boolean markGymPlaced(TownAnchor town, BlockPos position, BlockPos leaderPosition, boolean leaderRequested) {
@@ -556,7 +587,7 @@ public final class WorldLeaguePlan extends SavedData {
         String fallback = "Frontier " + (Math.abs((townId + ":" + center.getX() + ":" + center.getZ()).hashCode()) % 10_000);
         String scope = campaign.map(value -> value.seedSalt() + "|" + townId + "|" + center.getX() + "," + center.getZ())
                 .orElse(townId + "|" + center.getX() + "," + center.getZ());
-        return RegionPlaceService.chooseName(level.getSeed(), scope, candidates, fallback);
+        return WorldGeography.chooseName(level.getSeed(), scope, candidates, fallback);
     }
 
     private synchronized void upgradeDeferredCampaignContent(ServerLevel level) {
@@ -589,31 +620,15 @@ public final class WorldLeaguePlan extends SavedData {
                 setDirty();
             }
             if (roadsideStops.containsKey(key)) {
-                publishRegionPlace(level, named, PlaceState.FALLBACK, roadsideStops.get(key));
+                publishRegionPlace(level, named, false, true);
             } else {
-                publishRegionPlace(level, named, named.bounds() == null ? PlaceState.PREDICTED : PlaceState.REALIZED, null);
+                publishRegionPlace(level, named, named.bounds() != null, false);
             }
         });
     }
 
-    private void publishRegionPlace(ServerLevel level, TownAnchor town, PlaceState state, BlockPos fallbackMarker) {
-        BlockPos center = fallbackMarker == null ? town.center() : fallbackMarker;
-        PlaceBounds bounds = state == PlaceState.REALIZED && town.bounds() != null
-                ? PlaceBounds.from(town.bounds()).expandedBy(TOWN_ZONE_FRINGE_BLOCKS)
-                : PlaceBounds.around(center.getX(), center.getZ(), state == PlaceState.PREDICTED ? 0 : 8);
-        String normalizedTown = town.id().toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9_./-]", "_");
-        String placePath = "town/" + town.siteX() + "_" + town.siteZ() + "/" + normalizedTown;
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(LeagueOrchestrator.MOD_ID, placePath);
-        Set<String> tags = new HashSet<>();
-        if (state == PlaceState.FALLBACK) {
-            tags.addAll(Set.of("place", "route_stop", "fallback"));
-        } else {
-            tags.addAll(Set.of("place", "town", "settlement", "atlas_site:" + town.siteX() + "," + town.siteZ()));
-            tags.add("region_profile:" + RegionPolicyService.profileAt(level, center.getX(), center.getZ()).id());
-            campaignIdFor(level, center).ifPresent(campaign -> tags.add("league_campaign:" + campaign));
-        }
-        RegionPlaceService.upsert(level, new RegionPlace(id, town.name(), state == PlaceState.FALLBACK ? "route_stop" : "town",
-                tags, bounds, state));
+    private void publishRegionPlace(ServerLevel level, TownAnchor town, boolean realized, boolean fallback) {
+        WorldGeography.publishPlace(level, town, realized, fallback);
     }
 
     private static String townKey(int siteX, int siteZ, String townId) {

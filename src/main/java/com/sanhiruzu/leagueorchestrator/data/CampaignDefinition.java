@@ -25,6 +25,10 @@ public record CampaignDefinition(
         List<ResourceLocation> legendaryEncounters,
         List<ResourceLocation> trainers,
         List<ResourceLocation> rewards,
+        /** BCA/template families that are permitted to be ordinary or gym towns. */
+        List<SettlementArchetype> settlementArchetypes,
+        /** Proportional town, coast, road-endpoint, and incidental-settlement tuning. */
+        SettlementLayout settlementLayout,
         /** Mods this campaign cannot run without. Missing ones make it unavailable. */
         Set<String> requiredProviders,
         /**

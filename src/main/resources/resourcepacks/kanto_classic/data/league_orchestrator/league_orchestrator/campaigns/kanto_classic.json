@@ -17,6 +17,30 @@
     "Cinnabar Island",
     "Indigo Plateau"
   ],
+  "settlement_archetypes": [
+    { "structure_prefix": "bca:village/default", "gym_town": "optional" },
+    { "structure_prefix": "bca:village/dark", "gym_town": "optional" },
+    { "structure_prefix": "bca:village/fairy", "gym_town": "optional" },
+    { "structure_prefix": "bca:village/fighting", "gym_town": "optional" },
+    { "structure_prefix": "bca:village/ice", "gym_town": "never" }
+  ],
+  "settlement_layout": {
+    "reference_continent_diameter_blocks": 20096,
+    "league_towns": { "minimum": 10, "average": 10, "maximum": 10 },
+    "town_spacing_blocks": { "minimum": 1280, "average": 2648, "maximum": 4096 },
+    "coastal_town_share_permille": { "minimum": 200, "average": 400, "maximum": 600 },
+    "local_search_radius_blocks": { "minimum": 1024, "average": 1760, "maximum": 2800 },
+    "coast_probe_distance_blocks": { "minimum": 256, "average": 448, "maximum": 640 },
+    "maximum_build_height": { "minimum": 96, "average": 104, "maximum": 120 },
+    "maximum_local_relief": { "minimum": 8, "average": 12, "maximum": 20 },
+    "maximum_town_terracing_relief": { "minimum": 20, "average": 32, "maximum": 48 },
+    "inland_search_attempts": { "minimum": 4, "average": 4, "maximum": 12 },
+    "coastal_search_attempts": { "minimum": 16, "average": 32, "maximum": 64 },
+    "incidental_settlements": { "minimum": 4, "average": 8, "maximum": 12 },
+    "incidental_spacing_blocks": { "minimum": 896, "average": 1440, "maximum": 2400 },
+    "incidental_search_attempts": { "minimum": 8, "average": 16, "maximum": 32 },
+    "incidental_road_endpoint_share_permille": { "minimum": 250, "average": 500, "maximum": 750 }
+  },
   "requires": [
     "cobblemon-additions"
   ],
