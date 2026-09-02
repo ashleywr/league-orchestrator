@@ -15,9 +15,12 @@
     "fabric-api": "*",
     "minecraft": "~${minecraft_version}",
     "java": ">=21",
-    "region_engine": ">=0.7.0",
     "cobblemon": ">=1.7.3",
     "rctapi": ">=0.15.2-beta",
     "rctmod": ">=0.18.1-beta"
+  },
+  "suggests": {
+    "region_engine": ">=0.7.0",
+    "otg": "*"
   }
 }

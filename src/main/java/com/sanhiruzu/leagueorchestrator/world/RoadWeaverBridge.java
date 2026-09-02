@@ -21,6 +21,7 @@ public final class RoadWeaverBridge {
     private static final String API_CLASS = "net.shiroha233.roadweaver.api.RoadNetworkApi";
     private static final Set<String> PUBLISHED_ENDPOINTS = new HashSet<>();
     private static final Set<String> PUBLISHED_ROUTES = new HashSet<>();
+    private static final Set<String> PUBLISHED_MAP_ROUTES = new HashSet<>();
 
     private static ApiMethods api;
     private static boolean unavailable;
@@ -35,10 +36,11 @@ public final class RoadWeaverBridge {
 
     /** Queues one explicit campaign route. RoadWeaver's false argument preserves its asynchronous renderer. */
     public static void connectCampaignRoute(ServerLevel level, String routeId, TownAnchor from, TownAnchor to) {
-        if (RoadWeaverPlacementAdapterBridge.isInstalled()) return;
         if (!isMounted(level)) return;
         BlockPos fromPosition = townEndpoint(from);
         BlockPos toPosition = townEndpoint(to);
+        submitMapRoute(level, fromPosition, toPosition, "ROAD", "campaign:" + routeId);
+        if (RoadWeaverPlacementAdapterBridge.isInstalled()) return;
         submitEndpoint(level, fromPosition, townLabel(from));
         submitEndpoint(level, toPosition, townLabel(to));
         submitRoute(level, fromPosition, toPosition, "campaign:" + routeId);
@@ -49,15 +51,24 @@ public final class RoadWeaverBridge {
         if (!isMounted(level)) return;
         BlockPos townPosition = townEndpoint(town);
         BlockPos gymEndpoint = horizontal(gymPosition);
+        submitMapRoute(level, townPosition, gymEndpoint, "STREET", "gym:" + town.id() + "/" + gym.id());
         submitEndpoint(level, townPosition, townLabel(town));
         submitEndpoint(level, gymEndpoint, "league_orchestrator:gym/" + town.id() + "/" + gym.id().getPath());
         submitRoute(level, townPosition, gymEndpoint, "gym:" + town.id() + "/" + gym.id());
+    }
+
+    /** Publishes a non-generating campaign itinerary link for the overview. */
+    public static void publishPreviewMapRoute(ServerLevel level, BlockPos from, BlockPos to,
+                                               String routeClass, String label) {
+        if (!isMounted(level)) return;
+        submitMapRoute(level, horizontal(from), horizontal(to), routeClass, label);
     }
 
     /** Clears only process-local cache when an integrated server stops. */
     public static synchronized void stop() {
         PUBLISHED_ENDPOINTS.clear();
         PUBLISHED_ROUTES.clear();
+        PUBLISHED_MAP_ROUTES.clear();
         api = null;
         unavailable = false;
     }
@@ -75,6 +86,15 @@ public final class RoadWeaverBridge {
         RouteIntent intent = new RouteIntent(level.dimension().location(), from, to, routeId);
         if (!isRoutePublished(intent.key()) && !ProviderIntegrationCoordinator.submit(new RouteAction(intent))) {
             LeagueOrchestrator.LOGGER.debug("RoadWeaver route {} deferred because the integration queue is full.", intent.key());
+        }
+    }
+
+    /** Adds campaign hierarchy to the overview without requesting a physical road. */
+    private static void submitMapRoute(ServerLevel level, BlockPos from, BlockPos to, String routeClass, String routeId) {
+        if (!isMounted(level) || isUnavailable()) return;
+        MapRouteIntent intent = new MapRouteIntent(level.dimension().location(), from, to, routeClass, routeId);
+        if (!isMapRoutePublished(intent.key()) && !ProviderIntegrationCoordinator.submit(new MapRouteAction(intent))) {
+            LeagueOrchestrator.LOGGER.debug("RoadWeaver map route {} deferred because the integration queue is full.", intent.key());
         }
     }
 
@@ -136,12 +156,56 @@ public final class RoadWeaverBridge {
         }
     }
 
+    private static final class MapRouteAction implements ProviderIntegrationCoordinator.ServerAction {
+        private final MapRouteIntent intent;
+
+        private MapRouteAction(MapRouteIntent intent) {
+            this.intent = intent;
+        }
+
+        @Override public String key() { return intent.key(); }
+        @Override public String providerId() { return "roadweaver"; }
+        @Override public String operationId() { return "register_map_route"; }
+
+        @Override
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public ProviderIntegrationCoordinator.ActionResult execute(MinecraftServer server) throws Exception {
+            if (!isMounted(server, intent.dimension()) || isUnavailable() || isMapRoutePublished(intent.key())) {
+                return ProviderIntegrationCoordinator.ActionResult.DROP;
+            }
+            ApiMethods methods = api();
+            if (methods.mapRoute() == null || methods.mapRouteClass() == null) {
+                return ProviderIntegrationCoordinator.ActionResult.DROP;
+            }
+            Object routeClass = Enum.valueOf((Class<? extends Enum>) methods.mapRouteClass().asSubclass(Enum.class), intent.routeClass());
+            methods.mapRoute().invoke(null, LeagueMount.level(server), intent.from(), intent.to(), routeClass, intent.routeId());
+            markMapRoutePublished(intent.key());
+            return ProviderIntegrationCoordinator.ActionResult.COMPLETE;
+        }
+
+        @Override
+        public void onFailure(MinecraftServer server, Throwable throwable) {
+            disable(throwable);
+        }
+    }
+
     private static synchronized ApiMethods api() throws ReflectiveOperationException {
         if (api != null) return api;
         Class<?> type = Class.forName(API_CLASS);
+        Method mapRoute = null;
+        Class<?> mapRouteClass = null;
+        try {
+            mapRouteClass = Class.forName("net.shiroha233.roadweaver.core.model.MapRouteClass");
+            mapRoute = type.getMethod("registerPlannedMapRoute", ServerLevel.class, BlockPos.class, BlockPos.class,
+                    mapRouteClass, String.class);
+        } catch (ReflectiveOperationException ignored) {
+            // Older RoadWeaver versions retain endpoint/road integration.
+        }
         api = new ApiMethods(
                 type.getMethod("registerStructureEndpoint", ServerLevel.class, BlockPos.class, String.class, boolean.class),
-                type.getMethod("ensureConnection", ServerLevel.class, BlockPos.class, BlockPos.class, boolean.class)
+                type.getMethod("ensureConnection", ServerLevel.class, BlockPos.class, BlockPos.class, boolean.class),
+                mapRoute,
+                mapRouteClass
         );
         return api;
     }
@@ -149,8 +213,10 @@ public final class RoadWeaverBridge {
     private static synchronized boolean isUnavailable() { return unavailable; }
     private static synchronized boolean isEndpointPublished(String key) { return PUBLISHED_ENDPOINTS.contains(key); }
     private static synchronized boolean isRoutePublished(String key) { return PUBLISHED_ROUTES.contains(key); }
+    private static synchronized boolean isMapRoutePublished(String key) { return PUBLISHED_MAP_ROUTES.contains(key); }
     private static synchronized void markEndpointPublished(String key) { PUBLISHED_ENDPOINTS.add(key); }
     private static synchronized void markRoutePublished(String key) { PUBLISHED_ROUTES.add(key); }
+    private static synchronized void markMapRoutePublished(String key) { PUBLISHED_MAP_ROUTES.add(key); }
 
     private static synchronized void disable(Throwable exception) {
         unavailable = true;
@@ -179,5 +245,9 @@ public final class RoadWeaverBridge {
         private String key() { return "roadweaver|route|" + dimension + "|" + routeId; }
     }
 
-    private record ApiMethods(Method register, Method connect) {}
+    private record MapRouteIntent(ResourceLocation dimension, BlockPos from, BlockPos to, String routeClass, String routeId) {
+        private String key() { return "roadweaver|map-route|" + dimension + "|" + routeId; }
+    }
+
+    private record ApiMethods(Method register, Method connect, Method mapRoute, Class<?> mapRouteClass) {}
 }

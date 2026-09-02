@@ -1,9 +1,6 @@
 package com.sanhiruzu.leagueorchestrator.world;
 
 import com.sanhiruzu.leagueorchestrator.LeagueOrchestrator;
-import com.sanhiruzu.regionengine.config.AtlasConfig;
-import com.sanhiruzu.regionengine.world.atlas.AtlasRegion;
-import com.sanhiruzu.regionengine.policy.RegionPolicyService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
@@ -52,16 +49,18 @@ public final class SettlementPredictor {
     private static final Set<String> PENDING_SITES = new HashSet<>();
     private SettlementPredictor() {}
 
-    /** Plans the full atlas site containing spawn before any exploration is needed. */
+    /** Plans the full geography site containing spawn before any exploration is needed. */
     public static void planSpawnSite(MinecraftServer server) {
         ServerLevel level = LeagueMount.level(server);
-        if (RoadWeaverPlacementAdapterBridge.isInstalled()) {
-            // RoadWeaver calls the integration after its own initial regional
-            // pass. Do not race it with a second structure-set scan here.
-            return;
-        }
-        AtlasRegion site = RegionPolicyService.atlasRegionAt(level.getSeed(), level.getSharedSpawnPos().getX(), level.getSharedSpawnPos().getZ());
-        if (site.kind() != AtlasRegion.Kind.CONTINENT) return;
+        // RoadWeaver's placement adapter contributes its own regional
+        // candidates, but it deliberately does not create League's durable
+        // town ledger or force the first tangible settlement.  Skipping this
+        // pass when the adapter is installed left a new Terra League world at
+        // the raw (0, 0) spawn with no town for either system to connect.
+        // The plan is idempotent, so RoadWeaver may still run its separate
+        // discovery pass without duplicate League towns.
+        WorldGeography.Site site = WorldGeography.siteAt(level, level.getSharedSpawnPos().getX(), level.getSharedSpawnPos().getZ());
+        if (site.kind() != WorldGeography.Kind.CONTINENT) return;
 
         WorldLeaguePlan plan = WorldLeaguePlan.get(level);
         if (!plan.isSitePlanned(site.cellX(), site.cellZ())) {
@@ -94,14 +93,13 @@ public final class SettlementPredictor {
                 level.getServer().execute(() -> applyPrediction(level, snapshot, settlements, error)));
     }
 
-    /** Expands the plan as players enter new atlas sites; this is not a chunk or structure event. */
+    /** Expands the plan as players enter new geography sites; this is not a chunk or structure event. */
     public static void planPlayerSites(MinecraftServer server) {
-        if (RoadWeaverPlacementAdapterBridge.isInstalled()) return;
         ServerLevel level = LeagueMount.level(server);
         server.getPlayerList().getPlayers().forEach(player -> {
             if (player.serverLevel() != level) return;
-            AtlasRegion site = RegionPolicyService.atlasRegionAt(level.getSeed(), player.getX(), player.getZ());
-            if (site.kind() == AtlasRegion.Kind.CONTINENT) requestSite(level, site.cellX(), site.cellZ());
+            WorldGeography.Site site = WorldGeography.siteAt(level, (int) player.getX(), (int) player.getZ());
+            if (site.kind() == WorldGeography.Kind.CONTINENT) requestSite(level, site.cellX(), site.cellZ());
         });
     }
 
@@ -112,6 +110,29 @@ public final class SettlementPredictor {
         synchronized (PENDING_SITES) {
             PENDING_SITES.clear();
         }
+    }
+
+    /**
+     * Supplies the active pack's deterministic town candidates to an optional
+     * RoadWeaver first-pass provider.  OTG does not expose these custom sets
+     * through {@code possibleStructureSets()}, so this deliberately reads the
+     * already-loaded registry while retaining the same pure placement math.
+     */
+    public static List<RoadWeaverCandidate> roadWeaverInitialCandidates(ServerLevel level,
+                                                                          int minBlockX, int minBlockZ,
+                                                                          int maxBlockX, int maxBlockZ) {
+        if (!LeagueMount.isMounted(level)) return List.of();
+        ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
+        List<SetPlan> plans = collectRegisteredPlans(level);
+        WorldGeography.Site site = WorldGeography.siteAt(level, level.getSharedSpawnPos().getX(),
+                level.getSharedSpawnPos().getZ());
+        Snapshot snapshot = Snapshot.capture(level,
+                Math.floorDiv(minBlockX, 16), Math.floorDiv(minBlockZ, 16),
+                Math.floorDiv(maxBlockX, 16), Math.floorDiv(maxBlockZ, 16),
+                state, plans, site.cellX(), site.cellZ());
+        return predict(snapshot).stream()
+                .map(settlement -> new RoadWeaverCandidate(settlement.structureId(), settlement.position()))
+                .toList();
     }
 
     private static void applyPrediction(ServerLevel level, Snapshot snapshot, List<PredictedSettlement> settlements, Throwable error) {
@@ -165,8 +186,10 @@ public final class SettlementPredictor {
                 continue;
             }
             if (placement instanceof LeagueTownStructurePlacement leagueTown) {
-                leagueTown.potentialChunks(snapshot.seed(), snapshot.minChunkX(), snapshot.minChunkZ(),
+                leagueTown.potentialChunks(snapshot.structureState(), snapshot.seed(), snapshot.minChunkX(), snapshot.minChunkZ(),
                                 snapshot.maxChunkX(), snapshot.maxChunkZ())
+                        .stream()
+                        .filter(candidate -> leagueTown.isRoadEndpoint(snapshot.structureState(), candidate))
                         .forEach(candidate -> addCandidate(snapshot, set, placement, candidate, predicted));
                 continue;
             }
@@ -206,6 +229,8 @@ public final class SettlementPredictor {
 
     private record PredictedSettlement(ResourceLocation structureId, BlockPos position) {}
 
+    public record RoadWeaverCandidate(ResourceLocation structureId, BlockPos position) {}
+
     /**
      * A complete StructureSet entry, rather than only League-tagged entries.
      * Vanilla selects from every entry in a set before it knows whether the
@@ -236,6 +261,31 @@ public final class SettlementPredictor {
         }
     }
 
+    private static List<SetPlan> collectRegisteredPlans(ServerLevel level) {
+        List<SetPlan> plans = new ArrayList<>();
+        for (Holder<StructureSet> setHolder : level.registryAccess()
+                .registryOrThrow(Registries.STRUCTURE_SET).holders().toList()) {
+            // This path is the RoadWeaver integration's authoritative town
+            // roster.  A settlement tag alone is deliberately insufficient:
+            // BCA's ordinary random-spread village sets also carry that tag,
+            // and feeding them here turns a ten-town league plan into hundreds
+            // of synthetic road endpoints.  Only League's planned placement
+            // owns the Kanto campaign slots.
+            if (!(setHolder.value().placement() instanceof LeagueTownStructurePlacement)) continue;
+            List<CandidateStructure> structures = new ArrayList<>();
+            for (StructureSet.StructureSelectionEntry entry : setHolder.value().structures()) {
+                Holder<Structure> structure = entry.structure();
+                Optional<ResourceKey<Structure>> key = structure.unwrapKey();
+                key.ifPresent(resourceKey -> structures.add(new CandidateStructure(
+                        resourceKey.location(), entry.weight(), structure.is(SETTLEMENTS))));
+            }
+            if (structures.stream().anyMatch(CandidateStructure::settlement)) {
+                plans.add(new SetPlan(setHolder.value().placement(), List.copyOf(structures)));
+            }
+        }
+        return List.copyOf(plans);
+    }
+
     private record Snapshot(long seed, int siteX, int siteZ, int minChunkX, int minChunkZ, int maxChunkX, int maxChunkZ,
                             ChunkGeneratorStructureState structureState, List<SetPlan> structureSets) {
         private static Snapshot capture(ServerLevel level, int siteX, int siteZ) {
@@ -254,7 +304,7 @@ public final class SettlementPredictor {
                 }
             }
 
-            int cellSize = AtlasConfig.get().cellSize;
+            int cellSize = WorldGeography.cellSize(level);
             int halfCell = cellSize / 2;
             int minimumBlock = siteX * cellSize - halfCell;
             int minimumBlockZ = siteZ * cellSize - halfCell;
@@ -267,7 +317,7 @@ public final class SettlementPredictor {
         private static Snapshot capture(ServerLevel level, int minChunkX, int minChunkZ, int maxChunkX, int maxChunkZ) {
             ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
             List<SetPlan> plans = collectPlans(state);
-            AtlasRegion site = RegionPolicyService.atlasRegionAt(level.getSeed(), level.getSharedSpawnPos().getX(), level.getSharedSpawnPos().getZ());
+            WorldGeography.Site site = WorldGeography.siteAt(level, level.getSharedSpawnPos().getX(), level.getSharedSpawnPos().getZ());
             return capture(level, minChunkX, minChunkZ, maxChunkX, maxChunkZ, state, plans, site.cellX(), site.cellZ());
         }
 

@@ -7,9 +7,6 @@ import com.sanhiruzu.leagueorchestrator.data.GymArchetype;
 import com.sanhiruzu.leagueorchestrator.data.LeagueDataReloadListener;
 import com.sanhiruzu.leagueorchestrator.provider.ProviderRegistry;
 import com.sanhiruzu.leagueorchestrator.provider.ProviderIntegrationCoordinator;
-import com.sanhiruzu.regionengine.policy.RegionPolicyService;
-import com.sanhiruzu.regionengine.place.RegionPlaceService;
-import com.sanhiruzu.regionengine.world.atlas.AtlasRegion;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -161,13 +158,13 @@ public final class LeagueCommands {
 
     private static int site(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        AtlasRegion atlas = RegionPolicyService.atlasRegionAt(player.serverLevel().getSeed(), player.getX(), player.getZ());
-        String profile = RegionPolicyService.profileAt(player.serverLevel(), player.getX(), player.getZ()).id().toString();
-        String place = RegionPlaceService.activePlaceAt(player.serverLevel(), player.getX(), player.getZ())
-                .map(value -> " in " + value.name() + " [" + value.id() + "]")
+        WorldGeography.Site atlas = WorldGeography.siteAt(player.serverLevel(), (int) player.getX(), (int) player.getZ());
+        String profile = WorldGeography.profileAt(player.serverLevel(), player.getX(), player.getZ()).toString();
+        String place = WorldLeaguePlan.get(player.serverLevel()).nearestTown(player.serverLevel(), player.blockPosition(), 256.0)
+                .map(value -> " near " + value.name() + " [" + value.id() + "]")
                 .orElse("");
         context.getSource().sendSuccess(() -> Component.literal(
-                "Atlas " + atlas.kind().name().toLowerCase() + " site " + atlas.cellX() + "," + atlas.cellZ()
+                "Geography " + atlas.kind().name().toLowerCase() + " site " + atlas.cellX() + "," + atlas.cellZ()
                         + " uses profile " + profile + place + "."), false);
         return 1;
     }
