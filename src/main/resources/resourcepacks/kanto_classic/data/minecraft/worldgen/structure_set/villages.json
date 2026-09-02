@@ -16,9 +16,6 @@
     { "structure": "bca:village/fairy_mid", "weight": 11 },
     { "structure": "bca:village/fighting_small", "weight": 16 },
     { "structure": "bca:village/fighting_mid", "weight": 11 },
-    { "structure": "bca:village/fighting_large", "weight": 2 },
-    { "structure": "bca:village/ice_small", "weight": 16 },
-    { "structure": "bca:village/ice_mid", "weight": 11 },
-    { "structure": "bca:village/ice_large", "weight": 2 }
+    { "structure": "bca:village/fighting_large", "weight": 2 }
   ]
 }

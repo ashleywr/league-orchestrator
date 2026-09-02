@@ -14,6 +14,7 @@
     "minecraft:sunflower_plains",
     "minecraft:swamp",
     "minecraft:windswept_forest",
-    "minecraft:windswept_hills"
+    "minecraft:windswept_hills",
+    { "id": "regions_unexplored:icy_heights", "required": false }
   ]
 }

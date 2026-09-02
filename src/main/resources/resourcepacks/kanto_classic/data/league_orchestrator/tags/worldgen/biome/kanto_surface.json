@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "#league_orchestrator:kanto_biomes",
+    { "id": "regions_unexplored:icy_heights", "required": false }
+  ]
+}

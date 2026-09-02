@@ -1,0 +1,16 @@
+{
+  "placement": {
+    "type": "league_orchestrator:planned_town",
+    "salt": 31415926,
+    "towns_per_continent": 64,
+    "minimum_separation": 56,
+    "slot_start": 10,
+    "slot_count": 54
+  },
+  "structures": [
+    { "structure": "bca:village/default_small", "weight": 12 },
+    { "structure": "bca:village/dark_small", "weight": 8 },
+    { "structure": "bca:village/fairy_small", "weight": 8 },
+    { "structure": "bca:village/fighting_small", "weight": 8 }
+  ]
+}

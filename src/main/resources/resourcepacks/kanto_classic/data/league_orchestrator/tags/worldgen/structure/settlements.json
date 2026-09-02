@@ -10,9 +10,6 @@
     { "id": "bca:village/fairy_mid", "required": false },
     { "id": "bca:village/fighting_small", "required": false },
     { "id": "bca:village/fighting_mid", "required": false },
-    { "id": "bca:village/fighting_large", "required": false },
-    { "id": "bca:village/ice_small", "required": false },
-    { "id": "bca:village/ice_mid", "required": false },
-    { "id": "bca:village/ice_large", "required": false }
+    { "id": "bca:village/fighting_large", "required": false }
   ]
 }

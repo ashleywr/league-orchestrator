@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:stony_peaks",
+    "minecraft:windswept_hills",
+    { "id": "regions_unexplored:icy_heights", "required": false }
+  ]
+}

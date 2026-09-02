@@ -3,13 +3,12 @@
     "type": "league_orchestrator:planned_town",
     "salt": 31415926,
     "towns_per_continent": 10,
-    "minimum_separation": 16,
+    "minimum_separation": 80,
     "slot_start": 8,
     "slot_count": 2
   },
   "structures": [
     { "structure": "bca:village/default_large", "weight": 8 },
-    { "structure": "bca:village/fighting_large", "weight": 8 },
-    { "structure": "bca:village/ice_large", "weight": 8 }
+    { "structure": "bca:village/fighting_large", "weight": 8 }
   ]
 }
