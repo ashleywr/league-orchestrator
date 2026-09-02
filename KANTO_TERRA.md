@@ -1,9 +1,10 @@
 # Terra Kanto runtime and validation guide
 
-This is the current, supported Kanto world-generation route. It replaces the
-earlier Region Engine/OTG experiments for the shared **Mod Test** Prism
-instance. Region Engine remains an optional integration; OTG is not used by
-this route.
+Terra Kanto is the supported Kanto terrain route. The original shared
+**Mod Test** profile uses it as its overworld with RoadWeaver. The
+**Cobblemon Koyo League** profile uses the same terrain as a dedicated League
+dimension, leaving its normal Koyo overworld persistent and RoadWeaver-free.
+Region Engine remains optional; OTG is not used by either route.
 
 ## What was chosen and why
 
@@ -35,7 +36,7 @@ contexts; it must not create a surface cavern biome or remove normal ores.
 
 ## Required runtime pieces
 
-Install these into the single shared instance:
+For the legacy Mod Test route, install these into:
 
 `C:\Users\ashle\AppData\Roaming\PrismLauncher\instances\Mod Test\minecraft`
 
@@ -44,45 +45,47 @@ Install these into the single shared instance:
 | Terra Fabric | `mods` | The selected world generator. |
 | Kanto Terra pack | `config\Terra\packs` | Biome selection, continent profile, and terrain expressions. |
 | Kanto Terra Hydrology | `config\Terra\addons` | Landmark mountain, river valleys, lake opportunity, and terrain validation fields. |
-| League Orchestrator | `mods\league_orchestrator-0.1.0.jar` | Campaign, sites/towns, semantic tags, and the RoadWeaver bridge. |
-| RoadWeaver | `mods` | Initial regional scan, map tiles, routes, and roads. |
+| League Orchestrator | `mods\league_orchestrator-0.1.0.jar` | Campaign, sites/towns, semantic tags, and optional RoadWeaver bridge. |
+| RoadWeaver | `mods` | When installed, the `roadweaver:road_generation` tag selects only `league_orchestrator:league`; Kanto can receive routes while the Koyo hub remains road-free. |
 | Regions Unexplored and its dependencies | `mods` | The real modded Kanto biome entries and their in-game biome effects. |
 
 The normal Kanto campaign and its semantic biome tags are bundled with League
 Orchestrator. They are global: no AutoMine action, `/datapack enable`, or
 per-world installation is required.
 
-Only one test instance is maintained: **Mod Test**. Do not use a stale “OTG
-Generator Test” instance as a second deployment target.
+Cobblemon Koyo League uses its own isolated Prism profile and must not share
+saves, generated state, or a server deployment with Mod Test or live Koyo.
 
 ## Create and test a Kanto world
 
 1. Stop Prism/Minecraft before replacing a runtime JAR, Terra pack, or Terra
    add-on.
-2. On **Create New World**, choose **Terra Kanto** from World Type. Minecraft
-   displays the selected preset as `generator:terra:kanto/kanto`; that is the
-   preset ID, not a free-form seed string.
-3. Choose a seed (or leave it blank) and create a **fresh** world. Do not use
-   `League Dimension` to validate this terrain.
-4. Wait for spawn preparation, League's buildable-site pass, and RoadWeaver's
-   initial plan. A short playable spawn can appear before all route work has
-   finished; the plan is ready when RoadWeaver reports its completed persisted
-   connections.
-5. Open RoadWeaver with `H`, zoom to the desired overview, explicitly request
-   a resample if needed, wait for it to finish, then take the screenshot.
+2. For **Cobblemon Koyo League**, create a fresh world with the runtime preset
+   `league_orchestrator:kanto_dimension` (AutoMine: `-WorldPreset
+   'league_orchestrator:kanto_dimension'`). This keeps the overworld normal and
+   adds `league_orchestrator:league` with Terra's resolved `kanto:kanto`
+   generator. Run `/league travel` to enter Kanto; run it again to return to
+   the hub.
+3. For the legacy **Mod Test** route, choose **Terra Kanto**. Minecraft displays
+   `generator:terra:kanto/kanto`; it is a preset ID, not a free-form seed.
+4. Wait for Kanto spawn preparation and League's buildable-site pass. In the
+   Koyo League route, RoadWeaver work belongs only to the League dimension;
+   the hub overworld is intentionally excluded.
+5. Only in the legacy RoadWeaver route, open RoadWeaver with `H`, request a
+   resample if needed, wait for it to finish, then take the screenshot.
 
 The first-world timing target is about **two to three minutes**. Record cold
 chunk timing separately; it diagnoses runtime exploration performance and is
 not interchangeable with initial planning time.
 
-Changes to a generator, Terra pack/add-on, campaign site plan, structure
-placement, or RoadWeaver initial scan require a new world. Existing worlds
-retain generated starts and RoadWeaver persistence at
+Changes to a generator, Terra pack/add-on, campaign site plan, or structure
+placement require a new world. The legacy RoadWeaver route additionally retains
+its initial scan at
 `data\roadweaver\persistence\structures\minecraft_overworld\state.json`.
 
 ## Biome and spawn contract
 
-The selected overworld biome remains the actual registry entry. For example,
+The selected Kanto-dimension biome remains the actual registry entry. For example,
 F3 may show `minecraft:forest` or a `regions_unexplored:*` biome. It should
 not show a synthetic Kanto biome ID merely because that location belongs to
 the Kanto campaign.

@@ -47,16 +47,30 @@ public final class LeagueOrchestrator implements ModInitializer {
             ResourceManagerHelper.registerBuiltinResourcePack(
                     ResourceLocation.fromNamespaceAndPath(MOD_ID, "kanto_classic"),
                     FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
-                    ResourcePackActivationType.NORMAL
+                    ResourcePackActivationType.ALWAYS_ENABLED
             );
+            if (FabricLoader.getInstance().isModLoaded("lithostitched")
+                    && FabricLoader.getInstance().isModLoaded("regions_unexplored")) {
+                // This is an optional data-only compatibility layer.  It
+                // enriches the specifically named Terra mountain-cavern
+                // biome with Regions Unexplored's maintained placed features
+                // without making either worldgen mod mandatory for League.
+                ResourceManagerHelper.registerBuiltinResourcePack(
+                        ResourceLocation.fromNamespaceAndPath(MOD_ID, "kanto_ru_caverns"),
+                        FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
+                        ResourcePackActivationType.ALWAYS_ENABLED
+                );
+            }
         } else {
             LOGGER.info("BCA pilot content is unavailable because cobblemon-additions is not installed; Frontier remains available.");
         }
-        ResourceManagerHelper.registerBuiltinResourcePack(
-                ResourceLocation.fromNamespaceAndPath(MOD_ID, "league_dimension"),
-                FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
-                ResourcePackActivationType.NORMAL
-        );
+        if (FabricLoader.getInstance().isModLoaded("terra")) {
+            ResourceManagerHelper.registerBuiltinResourcePack(
+                    ResourceLocation.fromNamespaceAndPath(MOD_ID, "kanto_dimension"),
+                    FabricLoader.getInstance().getModContainer(MOD_ID).orElseThrow(),
+                    ResourcePackActivationType.DEFAULT_ENABLED
+            );
+        }
         ResourceManagerHelper.get(PackType.SERVER_DATA)
                 .registerReloadListener(new LeagueDataReloadListener());
         // Resolve before any level loads, so classification below is correct.

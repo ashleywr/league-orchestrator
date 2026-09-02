@@ -58,6 +58,13 @@ public final class OutsideLeaguePlacement extends StructurePlacement {
 
     @Override
     protected boolean isPlacementChunk(ChunkGeneratorStructureState state, int chunkX, int chunkZ) {
+        // Terra can wrap a generator state while RoadWeaver creates a
+        // road-triggered chunk. Retain the level-scoped fallback only for the
+        // legacy Terra-overworld layout; applying it when Kanto is a separate
+        // League dimension would incorrectly switch villages off in the hub.
+        if (LeagueMount.hasTerraOverworldMountedState()) {
+            return false;
+        }
         if (LeagueMount.isMountedState(state)) {
             return false;
         }

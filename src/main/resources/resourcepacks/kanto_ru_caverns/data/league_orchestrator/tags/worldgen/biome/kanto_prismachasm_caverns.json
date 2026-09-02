@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "terra:kanto_mountain_cavern/kanto/kanto_mountain_cavern",
+      "required": false
+    }
+  ]
+}

@@ -6,10 +6,11 @@ tiers, gyms, trainer allocation, encounter semantics, and the endpoints it
 offers to RoadWeaver. It does not redistribute third-party structures or
 assets.
 
-The current Kanto test route uses **Terra Kanto**: a finite, seeded,
-Kanto-inspired continent with real Minecraft and Regions Unexplored biome IDs,
-terrain-aware League settlement placement, and RoadWeaver macro routes. It is
-the supported world type for the shared `Mod Test` instance.
+Terra Kanto is a finite, seeded, Kanto-inspired continent with real Minecraft
+and Regions Unexplored biome IDs plus terrain-aware League settlement
+placement. The original `Mod Test` route mounts it as the overworld and uses
+RoadWeaver. **Cobblemon Koyo League** instead mounts it as a separate campaign
+dimension, keeping the normal Koyo overworld persistent and RoadWeaver-free.
 
 See [KANTO_TERRA.md](KANTO_TERRA.md) for the complete installation, fresh-world,
 validation, tuning, visual, and troubleshooting guide.
@@ -17,13 +18,14 @@ validation, tuning, visual, and troubleshooting guide.
 ## Choosing a world type
 
 Choose the world type once when creating a world. Terrain and the initial
-League/RoadWeaver plan are saved, so changing generator, settlement, or route
-settings means creating a fresh test world.
+League plan are saved, so changing generator or settlement settings means
+creating a fresh test world.
 
 | World type | Use it for |
 |---|---|
-| `Terra Kanto` (`terra:kanto/kanto`) | The active Kanto campaign test: finite continent, Terra terrain/hydrology, real biome registry entries, League towns, and RoadWeaver routes. |
-| `League Dimension` | A separate League dimension over vanilla terrain. It is retained for compatibility, not for Kanto terrain testing. |
+| `Kanto League Dimension` (`league_orchestrator:kanto_dimension`) | The Cobblemon Koyo League route: normal Koyo hub overworld plus a Terra `kanto:kanto` League dimension. RoadWeaver, when installed, is tagged for Kanto only. |
+| `Terra Kanto` (`terra:kanto/kanto`) | The legacy Mod Test route: finite Terra overworld, League towns, and optional RoadWeaver routes. |
+| `League Dimension (Vanilla)` | A separate League dimension over vanilla terrain, retained for compatibility. |
 | `Normal` | Vanilla/modpack terrain. League can still run its non-Terra fallback behavior. |
 
 `Atlas World` is only available when the optional Region Engine integration
@@ -32,9 +34,10 @@ Orchestrator; Terra Kanto works without it. OpenTerrainGenerator is likewise
 not required for the active Kanto route.
 
 The compact `generator:terra:kanto/kanto` text in Minecraft's create-world UI
-is the world-preset identifier, not a seed or a command to type. Select the
-**Terra Kanto** entry from the normal World Type list; the field only displays
-the selected preset in Minecraft's native format.
+is the legacy Terra-overworld preset identifier, not a seed or a command to
+type. For Cobblemon Koyo League, use the runtime preset
+`league_orchestrator:kanto_dimension` (for example through AutoMine); the hub
+overworld remains normal and `/league travel` enters or leaves Kanto.
 
 ## Kanto in brief
 
@@ -49,10 +52,8 @@ the selected preset in Minecraft's native format.
   A modpack author can provide the same biome/spawn contract under their own
   namespace in a datapack—no Java recompilation is needed once their
   geographic provider exposes that campaign profile.
-- RoadWeaver consumes League's realized town and landmark endpoints and owns
-  terrain sampling, route deduplication, and road placement. League owns
-  which places are meaningful; RoadWeaver owns how the wilderness road crosses
-  terrain.
+- RoadWeaver is an optional legacy renderer. Cobblemon Koyo League intentionally
+  omits it; League towns and gameplay do not require roads to be installed.
 
 ## Content packs and integrations
 

@@ -36,6 +36,10 @@ public final class StarterTownBootstrap {
     /** Called before the first prediction, preserving all existing world spawns. */
     public static void begin(MinecraftServer server) {
         ServerLevel level = LeagueMount.level(server);
+        // This is deliberately independent of RoadWeaver's initial scan.
+        // Its planner only samples generator base heights, so it loads no
+        // chunks and remains safe during server startup.
+        LeagueTownStructurePlacement.ensureTerraCandidates(level);
         if (WorldLeaguePlan.get(level).beginStarterTown(level.getSharedSpawnPos())) {
             LeagueOrchestrator.LOGGER.info("New League world: reserving the closest realized town in the initial atlas as starter spawn.");
         }

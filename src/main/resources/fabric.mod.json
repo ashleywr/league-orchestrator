@@ -10,6 +10,9 @@
   "entrypoints": {
     "main": ["com.sanhiruzu.leagueorchestrator.LeagueOrchestrator"]
   },
+  "mixins": [
+    "league_orchestrator.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=${fabric_loader_version}",
     "fabric-api": "*",

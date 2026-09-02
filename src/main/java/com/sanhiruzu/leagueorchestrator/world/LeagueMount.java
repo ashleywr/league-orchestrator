@@ -1,8 +1,6 @@
 package com.sanhiruzu.leagueorchestrator.world;
 
 import com.sanhiruzu.leagueorchestrator.LeagueOrchestrator;
-import com.sanhiruzu.regionengine.world.atlas.AtlasScope;
-import com.sanhiruzu.regionengine.world.atlas.AtlasScopeData;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -48,6 +46,9 @@ public final class LeagueMount {
      */
     private static final Set<ChunkGeneratorStructureState> MOUNTED_STATES =
             Collections.newSetFromMap(new IdentityHashMap<>());
+    /** Generator states for the mounted level only when that level actually uses Terra. */
+    private static final Set<ChunkGeneratorStructureState> TERRA_MOUNTED_STATES =
+            Collections.newSetFromMap(new IdentityHashMap<>());
 
     private static volatile ResourceKey<Level> resolved = Level.OVERWORLD;
 
@@ -60,6 +61,7 @@ public final class LeagueMount {
      */
     public static void resolve(MinecraftServer server) {
         MOUNTED_STATES.clear();
+        TERRA_MOUNTED_STATES.clear();
         // SERVER_STARTING runs before levels are created, so ask the dimension
         // registry rather than the level map. The registry comes from world
         // data and is already populated here.
@@ -68,11 +70,6 @@ public final class LeagueMount {
                 .containsKey(ResourceKey.create(Registries.LEVEL_STEM, LEAGUE_DIMENSION.location()));
         resolved = hasLeagueDimension ? LEAGUE_DIMENSION : Level.OVERWORLD;
         LeagueOrchestrator.LOGGER.info("League content is mounted in {}", resolved.location());
-        // Region Engine records Atlas scope when a new world first runs, which
-        // happens after this. Telling it now means the world type is the only
-        // decision an operator makes: picking the League Dimension world type
-        // shapes the League dimension and leaves the hub overworld vanilla.
-        AtlasScope.suggestDefaultScope(Set.of(resolved.location().toString()));
     }
 
     /** The level League generates and plans into. */
@@ -96,11 +93,13 @@ public final class LeagueMount {
         ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
         if (isMounted(level)) {
             MOUNTED_STATES.add(state);
-        } else {
-            // A /reload or datapack swap rebuilds generators; a stale instance
-            // must not stay marked as the mount.
-            MOUNTED_STATES.remove(state);
+            if (WorldGeography.isTerraWorld(level)) TERRA_MOUNTED_STATES.add(state);
         }
+        // Do not remove a state when a non-mounted level loads.  Custom
+        // generators may reuse one structure-state object between dimensions;
+        // removing it here makes the overworld's deterministic town placement
+        // appear invalid to an early RoadWeaver prediction pass.  The set is
+        // cleared at server start/stop, and a reload contributes a new state.
     }
 
     /**
@@ -112,30 +111,40 @@ public final class LeagueMount {
         return MOUNTED_STATES.contains(state);
     }
 
+    /** True only for a structure state belonging to an actively mounted Terra world. */
+    public static boolean isTerraMountedState(ChunkGeneratorStructureState state) {
+        return TERRA_MOUNTED_STATES.contains(state);
+    }
+
+    /** Supports optional APIs that do not expose a structure state but run after level classification. */
+    public static boolean hasTerraMountedState() {
+        return !TERRA_MOUNTED_STATES.isEmpty();
+    }
+
     /**
-     * Reports when the mounted dimension has no Atlas geography. League towns
-     * are placed against Region Engine's continent classification, so a mount
-     * outside the Atlas scope would predict towns on terrain that has no
-     * continents. Atlas scope is fixed at world creation and cannot be
-     * repaired here, so this reports rather than tries to correct it.
+     * True only for the legacy layout where Terra Kanto is the overworld.
+     *
+     * <p>Terra can wrap a structure state while RoadWeaver is producing a
+     * road-triggered chunk, so that legacy layout needs a conservative
+     * level-scoped fallback.  A separate Terra League dimension must not use
+     * that fallback: its hub overworld keeps ordinary village placement.</p>
      */
+    public static boolean hasTerraOverworldMountedState() {
+        return resolved.equals(Level.OVERWORLD) && hasTerraMountedState();
+    }
+
+    /** Reports which geography provider is backing this campaign. */
     public static void verifyAtlasScope(MinecraftServer server) {
-        if (!LEAGUE_DIMENSION.equals(resolved)) {
-            return;
-        }
-        AtlasScopeData scope = AtlasScopeData.get(server.overworld());
-        if (!scope.covers(resolved.location().toString())) {
-            LeagueOrchestrator.LOGGER.error(
-                    "League is mounted in {} but this world's Atlas scope is {}. Towns are placed "
-                            + "against Atlas continents, so this world will not generate a coherent "
-                            + "campaign. Atlas scope is fixed at world creation: use a new world with "
-                            + "atlasDimensions covering {}.",
-                    resolved.location(), scope.dimensions(), resolved.location());
-        }
+        LeagueOrchestrator.LOGGER.info("League geography provider: {}.",
+                WorldGeography.usesRegionEngine() ? "Region Engine Atlas"
+                        : WorldGeography.usesTerra() ? "Terra-compatible generator bridge"
+                        : "deterministic fallback");
     }
 
     public static void clear() {
         MOUNTED_STATES.clear();
+        TERRA_MOUNTED_STATES.clear();
+        LeagueTownStructurePlacement.clearTerraCandidates();
         resolved = Level.OVERWORLD;
     }
 }

@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    { "id": "regions_unexplored:patch/prismoss_sprout", "required": false },
+    { "id": "regions_unexplored:patch/cave_hyssop", "required": false },
+    { "id": "regions_unexplored:patch/prismarite_cluster", "required": false },
+    { "id": "regions_unexplored:special/hanging_prismarite_cluster", "required": false }
+  ]
+}

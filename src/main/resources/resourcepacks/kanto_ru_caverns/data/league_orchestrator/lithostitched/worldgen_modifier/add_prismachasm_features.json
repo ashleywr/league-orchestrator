@@ -1,0 +1,6 @@
+{
+  "type": "lithostitched:add_features",
+  "biomes": "#league_orchestrator:kanto_prismachasm_caverns",
+  "features": "#league_orchestrator:kanto_prismachasm_decor",
+  "step": "vegetal_decoration"
+}
