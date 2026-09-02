@@ -39,20 +39,27 @@ import java.util.List;
  * datapack content, so they never auto-register as dimensions of their own).
  *
  * <p>Registers directly into the {@link Registries#LEVEL_STEM} registry from
- * {@link DynamicRegistrySetupCallback}, the earliest point a Fabric mod can
- * add registry entries - before that boot's datapack json for any worldgen
- * registry has decoded. Cross-registry references (biomes, the dimension
- * type, the reused overworld noise settings) are resolved through
+ * {@link DynamicRegistrySetupCallback}. That event fires once per registry
+ * <em>layer</em> of Fabric's combined registry manager, and
+ * {@code Registries#LEVEL_STEM} decodes in a later, separate layer
+ * ({@code RegistryLayer.DIMENSIONS}) from the biome/dimension-type/noise-settings
+ * registries it needs to reference ({@code RegistryLayer.WORLDGEN}) - those
+ * are never present together in a single firing. So each firing caches
+ * whichever lookups it can see, and the actual registration happens once
+ * {@code LEVEL_STEM} itself becomes available, using the lookups cached from
+ * the earlier firing. Cross-registry references are resolved through
  * {@link WritableRegistry#createRegistrationLookup()}, the same
- * forward-reference mechanism vanilla's own bootstrap registration uses,
- * since nothing has decoded yet at this point either - those references
- * resolve correctly once the normal decode pass runs immediately afterward.
+ * forward-reference mechanism vanilla's own bootstrap registration uses.
  */
 public final class LeagueDimensionRegistrar {
     /** Region profile ids with a bundled {@code region_profiles/<id>.json} template. */
     public static final java.util.Set<String> KNOWN_REGIONS = java.util.Set.of("kanto", "alola");
 
     private static final Gson GSON = new Gson();
+
+    private static volatile HolderGetter<Biome> cachedBiomeLookup;
+    private static volatile HolderGetter<DimensionType> cachedDimensionTypeLookup;
+    private static volatile HolderGetter<NoiseGeneratorSettings> cachedNoiseSettingsLookup;
 
     private LeagueDimensionRegistrar() {
     }
@@ -62,29 +69,42 @@ public final class LeagueDimensionRegistrar {
     }
 
     private static void onRegistrySetup(DynamicRegistryView registryView) {
+        registryView.getOptional(Registries.BIOME)
+                .filter(registry -> registry instanceof WritableRegistry<Biome>)
+                .ifPresent(registry -> cachedBiomeLookup = ((WritableRegistry<Biome>) registry).createRegistrationLookup());
+        registryView.getOptional(Registries.DIMENSION_TYPE)
+                .filter(registry -> registry instanceof WritableRegistry<DimensionType>)
+                .ifPresent(registry -> cachedDimensionTypeLookup = ((WritableRegistry<DimensionType>) registry).createRegistrationLookup());
+        registryView.getOptional(Registries.NOISE_SETTINGS)
+                .filter(registry -> registry instanceof WritableRegistry<NoiseGeneratorSettings>)
+                .ifPresent(registry -> cachedNoiseSettingsLookup = ((WritableRegistry<NoiseGeneratorSettings>) registry).createRegistrationLookup());
+
         Registry<LevelStem> levelStems = registryView.getOptional(Registries.LEVEL_STEM).orElse(null);
-        Registry<Biome> biomes = registryView.getOptional(Registries.BIOME).orElse(null);
-        Registry<DimensionType> dimensionTypes = registryView.getOptional(Registries.DIMENSION_TYPE).orElse(null);
-        Registry<NoiseGeneratorSettings> noiseSettings = registryView.getOptional(Registries.NOISE_SETTINGS).orElse(null);
-        if (levelStems == null || biomes == null || dimensionTypes == null || noiseSettings == null) {
-            // This layer of the combined registry manager does not carry worldgen
-            // registries at all (e.g. a client-only layer); nothing to do here.
-            return;
-        }
+        if (levelStems == null) return;
         if (!(levelStems instanceof WritableRegistry<LevelStem> writableLevelStems)) {
             LeagueOrchestrator.LOGGER.warn("League dimension slots were not registered: LEVEL_STEM registry is not writable.");
             return;
         }
+        HolderGetter<Biome> biomeLookup = cachedBiomeLookup;
+        HolderGetter<DimensionType> dimensionTypeLookup = cachedDimensionTypeLookup;
+        HolderGetter<NoiseGeneratorSettings> noiseSettingsLookup = cachedNoiseSettingsLookup;
+        if (biomeLookup == null || dimensionTypeLookup == null || noiseSettingsLookup == null) {
+            LeagueOrchestrator.LOGGER.error(
+                    "League dimension slots were not registered: LEVEL_STEM became available before biome ({}), "
+                            + "dimension-type ({}), or noise-settings ({}) registration lookups were cached. "
+                            + "This means the registry layer ordering changed from what LeagueDimensionRegistrar assumes.",
+                    biomeLookup != null, dimensionTypeLookup != null, noiseSettingsLookup != null);
+            return;
+        }
 
-        HolderGetter<Biome> biomeLookup = ((WritableRegistry<Biome>) biomes).createRegistrationLookup();
-        HolderGetter<DimensionType> dimensionTypeLookup = ((WritableRegistry<DimensionType>) dimensionTypes).createRegistrationLookup();
-        HolderGetter<NoiseGeneratorSettings> noiseSettingsLookup = ((WritableRegistry<NoiseGeneratorSettings>) noiseSettings).createRegistrationLookup();
         Holder<DimensionType> overworldType = dimensionTypeLookup.getOrThrow(BuiltinDimensionTypes.OVERWORLD);
         Holder<NoiseGeneratorSettings> overworldNoise = noiseSettingsLookup.getOrThrow(NoiseGeneratorSettings.OVERWORLD);
 
+        boolean any = false;
         for (int slot = 1; slot <= LeagueMount.SLOT_COUNT; slot++) {
             String region = LeagueSlotAssignments.get().regionFor(slot);
             if (region == null || region.isBlank()) continue;
+            any = true;
             try {
                 LevelStem stem = buildStem(region, biomeLookup, overworldType, overworldNoise);
                 ResourceKey<LevelStem> key = ResourceKey.create(Registries.LEVEL_STEM, LeagueMount.slotDimension(slot).location());
@@ -93,6 +113,9 @@ public final class LeagueDimensionRegistrar {
             } catch (IOException | RuntimeException exception) {
                 LeagueOrchestrator.LOGGER.error("Could not register League dimension slot {} (region '{}')", slot, region, exception);
             }
+        }
+        if (!any) {
+            LeagueOrchestrator.LOGGER.info("No League dimension slots are assigned; every slot stays unregistered.");
         }
     }
 
