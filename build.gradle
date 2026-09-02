@@ -23,9 +23,7 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
 
-    // Local development contracts only. The released mod declares both as
-    // runtime dependencies and never embeds either jar.
-    modCompileOnly files('../../Region Engine/repo/build/libs/region_engine-0.7.0.jar')
+    // Local development contract only. The released mod never embeds this jar.
     def cobblemonDevJar = providers.gradleProperty('cobblemon_dev_jar').orNull
     if (cobblemonDevJar == null) {
         throw new GradleException('Set -Pcobblemon_dev_jar=<path to Cobblemon Fabric jar> for local development.')
