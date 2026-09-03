@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:windswept_hills",
+    { "id": "regions_unexplored:mountains", "required": false }
+  ]
+}

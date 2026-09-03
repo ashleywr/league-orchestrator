@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:forest",
+    { "id": "regions_unexplored:deciduous_forest", "required": false },
+    { "id": "regions_unexplored:temperate_grove", "required": false }
+  ]
+}

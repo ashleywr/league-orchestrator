@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:plains",
+    { "id": "regions_unexplored:grassland", "required": false }
+  ]
+}
